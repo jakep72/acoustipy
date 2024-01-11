@@ -38,7 +38,8 @@ jobs:
       name: pypi
       url: https://pypi.org/p/<acoustipy>  # Replace <package-name> with your PyPI project name
     permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
+      username: __token__
+      password: ${{ secrets.PYPI_TOKEN }}
 
     steps:
     - name: Download all the dists
@@ -48,5 +49,4 @@ jobs:
         path: dist/
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
-        username: __token__
-        password: ${{ secrets.PYPI_TOKEN }}
+
