@@ -7,9 +7,9 @@ packages = ["src/acoustipy"]
 
 [project]
 name = "acoustipy"
-version = "1.0.0"
+version = "0.1.0"
 authors = [
-  { name="Jacob Peterson", email="jdpeterson072@gmail.com" },
+  { name="Jacob Peterson", email="jdpeterman72@gmail.com" },
 ]
 description = "Tools for characterizing the acoustic performance of porous materials."
 readme = "README.md"

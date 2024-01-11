@@ -18,9 +18,6 @@ Investigate and optimize the acoustic performance of porous and microperforate m
 Examples of most of the functionality of acoustipy can be found in the Examples section.  The snippet below corresponds to the multilayer structure example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.
 <br></br>
 
-
-\[K_{eq} = \frac{P_{0}}{\phi}\qquad\rho_{eq} = \frac{\rho_{0}}{\phi}+\frac{\sigma}{j\omega}\]
-
 ```Python
 from acoustipy import acousticTMM
 

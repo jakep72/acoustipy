@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 
 config = {
-    'name': 'Acoustipy',
+    'name': 'acoustipy',
     'version': '0.1.0',
     'description': 'Tools for characterizing porous materials and their acoustic properties',
     'packages': find_packages(),
