@@ -1,0 +1,57 @@
+site_name: acoustipy
+
+theme: #readthedocs
+  name: material
+  features:
+    - content.code.copy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            members: true
+            filters: []
+            allow_inspection: true
+            show_root_toc_entry: false
+            members_order: source
+            show_root_heading: false
+            docstring_style: google
+            show_symbol_type_heading: true
+
+nav: 
+  - Home: README.md
+  - API Reference:
+    - AcousticTMM.md
+    - AcousticID.md
+    - AcoustiBase.md
+  - Examples:
+    - Transfer Matrix / Database Examples: 
+      - Multilayer Structure: Examples/multilayer_structure.md
+      - Impedance Tube: Examples/impedance_tube.md
+      - Saving Layers: Examples/layer_to_database.md
+      - Loading Layers: Examples/layers_from_database.md
+      - Saving and Loading Structures: Examples/structure_to_database.md
+    - Material Characterization Examples:
+      - Inverse Method: Examples/Inverse.md
+      - Indirect Method: Examples/Indirect.md
+      - Hybrid Method: Examples/Hybrid.md
+  
