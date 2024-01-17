@@ -1,8 +1,15 @@
+[![mkdocs-deploy](https://github.com/jakep72/acoustipy/actions/workflows/build_docs.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/build_docs.yml)
+[![Tests](https://github.com/jakep72/acoustipy/actions/workflows/testing.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/testing.yml)
+[![Publish to PyPI](https://github.com/jakep72/acoustipy/actions/workflows/python-publish.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/python-publish.yml)
+
+
+
+# acoustipy
+
 Investigate and optimize the acoustic performance of porous and microperforate materials with acoustipy.  Use the acoustic transfer matrix method to explore new material designs and identify unique properties of existing materials via inverse, indirect, and hybrid optimization schemes.
 <br></br>
 
 # Installation
-
 
 ### Create and activate a new virtual environment (recommended)
     mkdir <your_env_name>
@@ -11,11 +18,17 @@ Investigate and optimize the acoustic performance of porous and microperforate m
     (Windows) cd Scripts && activate.bat
     (Linux) source bin/activate
 
+### Install from source
+    git clone https://github.com/jakep72/acoustipy.git
+    cd acoustipy
+    pip install -e .
+    pip install -r requirements.txt
+
 ### Install from PyPI
     pip install acoustipy
 
 # Basic Usage
-Examples of most of the functionality of acoustipy can be found in the Examples section.  The snippet below corresponds to the multilayer structure example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.
+Examples of most of the functionality of acoustipy can be found in the Examples section of the [documentation](https://jakep72.github.io/acoustipy/).  The snippet below corresponds to the multilayer structure example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.
 <br></br>
 
 ```Python

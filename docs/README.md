@@ -3,19 +3,24 @@ Investigate and optimize the acoustic performance of porous and microperforate m
 
 # Installation
 
-
-### (recommended) Create and activate a new virtual environment
+### Create and activate a new virtual environment (recommended)
     mkdir <your_env_name>
     python -m venv .venv
     cd .venv
     (Windows) cd Scripts && activate.bat
     (Linux) source bin/activate
 
+### Install from source
+    git clone https://github.com/jakep72/acoustipy.git
+    cd acoustipy
+    pip install -e .
+    pip install -r requirements.txt
+
 ### Install from PyPI
     pip install acoustipy
 
 # Basic Usage
-Examples of most of the functionality of acoustipy can be found in the Examples section.  The snippet below corresponds to the multilayer structure example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.
+Examples of most of the functionality of acoustipy can be found in the [Examples](Examples) section.  The snippet below corresponds to the multilayer structure example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.
 <br></br>
 
 
