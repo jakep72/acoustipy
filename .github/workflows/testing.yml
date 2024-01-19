@@ -27,14 +27,14 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install pytest
-        python -m pip install pytest-cov
+        pip install -U pytest-cov coverage-lcov
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Test with pytest
-      run: |
-        python -m pytest --cov=acoustipy tests/ --cov-report xml
-    - name: Coveralls
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
-        path-to-lcov: coverage.xml
+
+      - name: Run tests
+        run: python -m pytest --cov=acoustipy tests/ --cov-report xml && coverage-lcov
+
+      - name: Coveralls github action
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: lcov.info
