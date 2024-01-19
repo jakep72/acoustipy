@@ -1,6 +1,8 @@
-[![mkdocs-deploy](https://github.com/jakep72/acoustipy/actions/workflows/build_docs.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/build_docs.yml)
-[![Tests](https://github.com/jakep72/acoustipy/actions/workflows/testing.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/testing.yml)
-[![Publish to PyPI](https://github.com/jakep72/acoustipy/actions/workflows/python-publish.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/python-publish.yml)
+[![Built with Material for MkDocs](https://img.shields.io/badge/Material_for_MkDocs-526CFE?style=for-the-badge&logo=MaterialForMkDocs&logoColor=white)](https://squidfunk.github.io/mkdocs-material/)
+![PyPI - Version](https://img.shields.io/pypi/v/acoustipy?style=for-the-badge)
+<!-- [![Tests](https://github.com/jakep72/acoustipy/actions/workflows/testing.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/testing.yml) -->
+<!-- [![Publish to PyPI](https://github.com/jakep72/acoustipy/actions/workflows/python-publish.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/python-publish.yml) -->
+<!-- [![mkdocs-deploy](https://github.com/jakep72/acoustipy/actions/workflows/build_docs.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/build_docs.yml) -->
 
 
 
