@@ -793,8 +793,6 @@ class AcousticTMM():
                               layer_name: str = None) -> list[np.ndarray, float, str]:
         """
         Define a layer using the Horoshenkov et al Model
-
-        https://pubs.aip.org/asa/jasa/article/145/4/2512/845598/A-three-parameter-analytical-model-for-the
         
         Parameters
         ----------
@@ -868,8 +866,6 @@ class AcousticTMM():
         """
         Define a limp Biot layer, using any of the equivalent fluid models
         
-        https://doi.org/10.1121/1.4826175 F.-X. Bécot, L. Jaouen, An alternative Biot's formulation for dissipative porous media with skeleton deformation, J. Acoust. Soc. Am. 134 (6), pp. 4801-4807, 2013
-
         Parameters
         ----------
         EF_model (str):
@@ -986,9 +982,6 @@ class AcousticTMM():
         """
         Define a rigid Biot layer, using any of the equivalent fluid models
 
-        https://doi.org/10.1121/1.4826175 F.-X. Bécot, L. Jaouen, An alternative Biot's formulation for dissipative porous media with skeleton deformation, J. Acoust. Soc. Am. 134 (6), pp. 4801-4807, 2013
-
-
         Parameters
         ----------
         EF_model (str):
@@ -1102,8 +1095,6 @@ class AcousticTMM():
         """
         Define a resistive screen layer
 
-        A simplified model for thin acoustic screens -- Gaborit, Dazel, Goransson https://doi.org/10.1121/1.5047929
-
         Parameters
         ----------
         thickness (float):
@@ -1157,8 +1148,6 @@ class AcousticTMM():
         
         """
         Define a microperforated layer using Maa's model
-
-        https://www.acoustics.asn.au/conference_proceedings/INTERNOISE2014/papers/p894.pdf
 
         Parameters
         ----------
@@ -1281,10 +1270,7 @@ class AcousticTMM():
         
         """
         Define a layer from the normal incidence reflection coefficients or the surface impedance of a material obtained from
-        an impedance tube.  Utsuno's method currently implemented. 
-
-        Transfer function method for measuring characteristic impedance and propagation constant of porous materials
-        The Journal of the Acoustical Society of America 86, 637 (1989); https://doi.org/10.1121/1.398241
+        an impedance tube.  Utsuno's method currently implemented.
 
         Parameters
         ----------

@@ -116,3 +116,29 @@ stats = {'slope': 1.000037058594857, 'intercept': 9.276088883464206e-05, 'r_valu
 <br></br>
 
 ![](assets/ex_material_identification_inverse.png)
+
+# References
+
+#### [1] https://apmr.matelys.com/
+
+#### [2] Jean‐F. Allard, Yvan Champoux; New empirical equations for sound propagation in rigid frame fibrous materials. J. Acoust. Soc. Am. 1 June 1992; 91 (6): 3346–3353. https://doi.org/10.1121/1.402824
+
+#### [3] Miki, Y. (1990). Acoustical Properties of porous materials : Modifications of Delany-Bazley models. The Journal of The Acoustical Society of Japan (e), 11, 19-24.
+
+#### [4] Yvan Champoux, Jean‐F. Allard; Dynamic tortuosity and bulk modulus in air‐saturated porous media. J. Appl. Phys. 15 August 1991; 70 (4): 1975–1979. https://doi.org/10.1063/1.349482
+
+#### [5] Kirill V. Horoshenkov, Alistair Hurrell, Jean-Philippe Groby; A         three-parameter analytical model for the acoustical properties of porous media. J. Acoust. Soc. Am. 1 April 2019; 145 (4): 2512–2517. https://doi.org/10.1121/1.5098778
+
+#### [6] François-Xavier Bécot, Luc Jaouen; An alternative Biot's formulation for dissipative porous media with skeleton deformation. J. Acoust. Soc. Am. 1 December 2013; 134 (6): 4801–4807. https://doi.org/10.1121/1.4826175
+
+#### [7] Mathieu Gaborit, Olivier Dazel, Peter Göransson; A simplified model for thin acoustic screens. J. Acoust. Soc. Am. 1 July 2018; 144 (1): EL76–EL81. https://doi.org/10.1121/1.5047929
+
+#### [8] Sarwono, Joko & Prasetiyo, Iwan & Andreas, S. & William, A.. (2014). The Design of MPP and its Application to Enhance the Acoustics of a Real Auditorium. 10.13140/RG.2.1.1766.0007.
+
+#### [9] Jaouen, Luc & Bécot, François-Xavier. (2011). Acoustical characterization of perforated facings. The Journal of the Acoustical Society of America. 129. 1400-6. 10.1121/1.3552887.
+
+#### [10] Hideo Utsuno, Toshimitsu Tanaka, Takeshi Fujikawa, A. F. Seybert; Transfer function method for measuring characteristic impedance and propagation constant of porous materials. J. Acoust. Soc. Am. 1 August 1989; 86 (2): 637–643. https://doi.org/10.1121/1.398241
+
+#### [11] Atalla, Youssef & Panneton, R.. (2005). Inverse acoustical characterization of open cell porous media using impedance tube measurements. Canadian Acoustics - Acoustique Canadienne. 33. 
+
+#### [12] Raymond Panneton, Yacoubou Salissou; Indirect acoustical characterization of sound absorbing materials.. J. Acoust. Soc. Am. 1 October 2009; 126 (4_Supplement): 2297. https://doi.org/10.1121/1.3249416

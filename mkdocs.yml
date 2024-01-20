@@ -54,4 +54,20 @@ nav:
       - Inverse Method: Examples/Inverse.md
       - Indirect Method: Examples/Indirect.md
       - Hybrid Method: Examples/Hybrid.md
-  
+  # - Theory:
+  #   - AcousticTMM:
+  #     - Porous Material Models:
+  #       - Delaney-Bazley: Theory/DB_Model.md
+  #       - Delaney-Bazley-Miki: Theory/DBM_Model.md
+  #       - Johnson-Champoux-Allard: Theory/JCA_Model.md
+  #       - Johnson-Champoux-Allard-Lafarge: Theory/JCAL_Model.md
+  #       - Johnson-Champoux-Allard-Pride-Lafarge: Theory/JCAPL_Model.md
+  #       - Horoshenkov: Theory/Horoshenkov_Model.md
+  #       - Biot-Limp: Theory/Biot_Limp_Model.md
+  #       - Biot-Rigid: Theory/Biot_Rigid_Model.md
+  #       - Screens: Theory/Resistive_Screen_Model.md
+  #     - Microperforates:
+  #       - MAA: Theory/MAA_MPP_Model.md
+  #       - Equivalent Fluid: Theory/EF_MPP_Model.md
+  #     - Transfer Matrices: Theory/TMM_Theory.md
+
