@@ -14,7 +14,7 @@ k_{c} = \displaystyle\frac{\omega}{c_{0}}
          - j 0.1890  \left(\frac{\rho_{0}f}{\sigma}\right)^{-0.595} \Bigg]
 \]
 
-In the acoustipy implementation, the characteristic impedence and wavenumber are converted to the dynamic mass density $(\tilde{\rho})$ and dynamic bulk modulus $(\widetilde{K})$ via the equations below, as the [Add_DB_Layer](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM.Add_DB_Layer) method calls the internal [_calc_dynamics](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM._calc_dynamics) method for consistency with the other equivalent fluid models.  The dynamic mass density and bulk modulus are then converted back to the characteristic impedence and wavenumber for use in the layer transfer matrix.
+In the acoustipy implementation, the characteristic impedence and wavenumber are converted to the dynamic mass density $(\tilde{\rho})$ and dynamic bulk modulus $(\widetilde{K})$ via the equations below, as the [Add_DB_Layer](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM.Add_DB_Layer) method calls the internal [_calc_dynamics](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM._calc_dynamics) method for consistency with the other equivalent fluid models.
 
 \[
 \tilde{\rho} = \frac{Z_{c}k_{c}}{\omega}
@@ -22,6 +22,16 @@ In the acoustipy implementation, the characteristic impedence and wavenumber are
 
 \[
 \widetilde{K} = \frac{{\omega}Z_{c}}{k_{c}}
+\]
+
+The dynamic mass density and bulk modulus are then converted back to the characteristic impedence and wavenumber for use in the layer transfer matrix via:
+
+\[
+Z_{c} = \sqrt{\tilde{\rho}\widetilde{K}}
+\]
+
+\[
+k_{c} = {\omega}\sqrt{\frac{\tilde{\rho}}{\widetilde{K}}}
 \]
 
 The model is valid in the frequency range defined below:
@@ -35,7 +45,7 @@ The model is valid in the frequency range defined below:
 ##### Using the following nomenclature --- Symbol = [Units] (name)
 
 \[
-    \sigma = \Bigg[\frac{Pa*s}{m^2}\Bigg]\tag{static airflow resistivity}
+\sigma = \Bigg[\frac{Pa*s}{m^2}\Bigg]\tag{static airflow resistivity}
 \]
 
 ## Defining Other Symbols:
@@ -43,7 +53,7 @@ The model is valid in the frequency range defined below:
 ##### Using the following nomenclature --- Symbol = [Units] (name) or Symbol = equation = [Units] (name)
 
 \[
-  \rho_{0} = \Bigg[\frac{kg}{m^3}\Bigg]\tag{air density}
+\rho_{0} = \Bigg[\frac{kg}{m^3}\Bigg]\tag{air density}
 \]
 
 \[

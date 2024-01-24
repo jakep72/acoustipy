@@ -20,7 +20,7 @@ Investigate and optimize the acoustic performance of porous and microperforate m
     pip install acoustipy
 
 # Basic Usage
-Examples of most of the functionality of acoustipy can be found in the [Examples](Examples) section.  The snippet below corresponds to the multilayer structure example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.
+Examples of most of the functionality of acoustipy can be found in the Examples section.  The snippet below corresponds to the [multilayer structure](https://jakep72.github.io/acoustipy/Examples/multilayer_structure/) example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.
 <br></br>
 
 ```Python
@@ -58,7 +58,8 @@ structure.plot_curve([absorption,bands],["absorption","third octave"])
 ![](assets/ex_multilayer_structure.png)
 
 <br>
-The example below demonstrates another core feature of acoustipy -- optimization routines that are able to identify the JCA model parameters of porous materials from impedance tube measurements.  The snippet can also be found under the Inverse Method in the Examples section.
+
+The example below demonstrates another core feature of acoustipy -- optimization routines that are able to identify the JCA model parameters of porous materials from impedance tube measurements.  The snippet can also be found under the [Inverse Method](https://jakep72.github.io/acoustipy/Examples/Inverse/) in the Examples section.
 <br></br>
 
 ```python
