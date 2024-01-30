@@ -2,7 +2,7 @@
 - Porous Material Models
     - [x] [DB Model](https://jakep72.github.io/acoustipy/Theory/DB_Model/)
     - [x] [DBM Model](https://jakep72.github.io/acoustipy/Theory/DBM_Model/)
-    - [ ] [JCA Model](https://jakep72.github.io/acoustipy/Theory/JCA_Model/)
+    - [x] [JCA Model](https://jakep72.github.io/acoustipy/Theory/JCA_Model/)
     - [ ] [JCAL Model](https://jakep72.github.io/acoustipy/Theory/JCAL_Model/)
     - [ ] [JCAPL Model](https://jakep72.github.io/acoustipy/Theory/JCAPL_Model/)
     - [ ] [Horoshenkov Model](https://jakep72.github.io/acoustipy/Theory/Horoshenkov_Model/)

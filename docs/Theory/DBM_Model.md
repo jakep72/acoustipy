@@ -3,15 +3,11 @@ The Delaney-Bazley-Mike model is an empirical, one parameter  model consisting o
 The equations for the complex characteristic impedance $(Z_{c})$ and wavenumber $(k_{c})$ can be found below:
 
 \[
-Z_{c} = \rho_{0} c_{0} 
-  \Bigg[ 1+0.0699  \left(\frac{f}{\sigma}\right)^{-0.632} 
-        - j 0.107  \left(\frac{f}{\sigma}\right)^{-0.632} \Bigg]
+Z_{c} = \rho_{0}c_{0}\Bigg[ 1+0.0699\left(\frac{f}{\sigma}\right)^{-0.632}-j0.107\left(\frac{f}{\sigma}\right)^{-0.632} \Bigg]
 \]
 
 \[
-k_{c} = \displaystyle\frac{\omega}{c_{0}} 
-  \Bigg[ 1 + 0.109  \left(\frac{f}{\sigma}\right)^{-0.618} 
-         - j 0.160  \left(\frac{f}{\sigma}\right)^{-0.618} \Bigg]
+k_{c} = \frac{\omega}{c_{0}}\Bigg[ 1 + 0.109\left(\frac{f}{\sigma}\right)^{-0.618} - j 0.160\left(\frac{f}{\sigma}\right)^{-0.618}\Bigg]
 \]
 
 As with the Delaney-Bazley Model, the acoustipy implementation converts the characteristic impedence and wavenumber to the dynamic mass density $(\tilde{\rho})$ and dynamic bulk modulus $(\widetilde{K})$ via the equations below, as the [Add_DBM_Layer](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM.Add_DBM_Layer) method calls the internal [_calc_dynamics](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM._calc_dynamics) method for consistency with the other equivalent fluid models.
@@ -37,7 +33,7 @@ k_{c} = {\omega}\sqrt{\frac{\tilde{\rho}}{\widetilde{K}}}
 The model is valid in the frequency range defined below:
 
 \[
-0.01 < \displaystyle{\frac{f}{\sigma}} < 1.00
+0.01 < {\frac{f}{\sigma}} < 1.00
 \]
 
 ## Model Parameters:
