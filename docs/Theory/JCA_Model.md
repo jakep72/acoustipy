@@ -2,7 +2,7 @@ The Johnson-Champoux-Allard model is a five parameter model consisting of the st
 
 The acoustipy implementation for the JCA, JCAL, and JCAPL models are all based on the implementation from [APMR](https://apmr.matelys.com/PropagationModels/MotionlessSkeleton/JohnsonChampouxAllardPrideLafargeModel.html).
 
-Note that for the JCA acoustipy implementation, found in the [_calc_dynamics](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM._calc_dynamics) method, the $M$ and $\bar\omega^\prime$ terms differ from the reference implementation as seen below.
+Note that for the JCA acoustipy implementation, found in the [_calc_dynamics](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM._calc_dynamics) method, the $\bar\omega^\prime$ term differs from the reference implementation as seen below.
 
 # Dynamic Mass Density
 \[
