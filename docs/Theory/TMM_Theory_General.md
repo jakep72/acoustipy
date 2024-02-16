@@ -6,8 +6,8 @@
     - [x] [JCAL Model](https://jakep72.github.io/acoustipy/Theory/JCAL_Model/)
     - [x] [JCAPL Model](https://jakep72.github.io/acoustipy/Theory/JCAPL_Model/)
     - [x] [Horoshenkov Model](https://jakep72.github.io/acoustipy/Theory/Horoshenkov_Model/)
-    - [ ] [Biot-Limp Model](https://jakep72.github.io/acoustipy/Theory/Biot_Limp_Model/)
-    - [ ] [Biot-Rigid Model](https://jakep72.github.io/acoustipy/Theory/Biot_Rigid_Model/)
+    - [x] [Biot-Limp Model](https://jakep72.github.io/acoustipy/Theory/Biot_Limp_Model/)
+    - [x] [Biot-Rigid Model](https://jakep72.github.io/acoustipy/Theory/Biot_Rigid_Model/)
     - [x] [Resistive Screen Model](https://jakep72.github.io/acoustipy/Theory/Resistive_Screen_Model/)
 - Microperforate Models
     - [ ] [MAA Model](https://jakep72.github.io/acoustipy/Theory/MAA_MPP_Model/)
