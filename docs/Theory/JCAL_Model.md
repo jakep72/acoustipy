@@ -1,3 +1,5 @@
+# JCAL Model
+
 The Johnson-Champoux-Allard-Lafarge model is a six parameter model consisting of the static airflow resistivity $(\sigma)$, porosity $(\phi)$, tortuosity $(\tau)$, viscous characteristic length $(\Lambda)$, thermal characteristic length $(\Lambda^\prime)$, and thermal permeability $(k_{0}^\prime)$.
 
 The acoustipy implementation for the JCA, JCAL, and JCAPL models are all based on the implementation from [APMR](https://apmr.matelys.com/PropagationModels/MotionlessSkeleton/JohnsonChampouxAllardPrideLafargeModel.html).  The equations described below can be found in the [_calc_dynamics](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM._calc_dynamics) method.

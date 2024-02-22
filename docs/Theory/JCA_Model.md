@@ -1,3 +1,5 @@
+# JCA Model
+
 The Johnson-Champoux-Allard model is a five parameter model consisting of the static airflow resistivity $(\sigma)$, porosity $(\phi)$, tortuosity $(\tau)$, viscous characteristic length $(\Lambda)$ and thermal characteristic length $(\Lambda^\prime)$.
 
 The acoustipy implementation for the JCA, JCAL, and JCAPL models are all based on the implementation from [APMR](https://apmr.matelys.com/PropagationModels/MotionlessSkeleton/JohnsonChampouxAllardPrideLafargeModel.html).
