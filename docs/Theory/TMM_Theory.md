@@ -80,6 +80,10 @@ To obtain the total transfer matrix $(T_{t})$ of a multilayered structure, matri
 
 The illustration below is an example of a resistive screen on the face of a porous material, backed by a layer of air.
 
+![](../assets/structure_graphic.png)
+
+This is represented by:
+
 \[
 T_{t} = T_{screen} \times T_{porous} \times T_{air}    
 \]
