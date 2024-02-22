@@ -38,7 +38,7 @@ and $eps$ is:
 eps = 2\sqrt{\frac{\phi}{\pi}}
 \]
 
-The [Add_MPP_EF_Layer](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM.Add_MPP_EF_Layer) method then converts The modified dynamic mass density and bulk modulus to the characteristic impedence $(Z_{c})$ and wavenumber $(k_{c})$ for use in the layer transfer matrix.
+The [Add_MPP_EF_Layer](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM.Add_MPP_EF_Layer) method then converts the modified dynamic mass density and bulk modulus to the characteristic impedence $(Z_{c})$ and wavenumber $(k_{c})$ for use in the layer transfer matrix.
 
 \[
 Z_{c} = \sqrt{\tilde{\rho}\widetilde{K}}

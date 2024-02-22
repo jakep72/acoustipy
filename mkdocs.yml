@@ -54,7 +54,7 @@ nav:
       - Inverse Method: Examples/Inverse.md
       - Indirect Method: Examples/Indirect.md
       - Hybrid Method: Examples/Hybrid.md
-  - Theory -- under active development:
+  - Theory:
     - AcousticTMM:
       - Overview: Theory/TMM_Theory_General.md
       - Porous Material Models:
