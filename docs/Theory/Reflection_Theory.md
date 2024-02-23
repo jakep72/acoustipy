@@ -1,6 +1,8 @@
-The frequency-dependent reflection coefficients $(R)$ are calculated directly from the total transfer matrix $(T_{t})$ of a multilayered structure.
+The frequency-dependent reflection coefficients $(R)$ are calculated directly from the total transfer matrix $(T_{t})$ of a multilayered structure.  These coefficients are a measure of how much sound is reflected off the surface of a structure.
 
 The coefficients can be calculated under both normal and diffuse sound field conditions.  Under a normal incidence sound field, the sound impinges on the surface from a single, perpendicular angle.  In the diffuse field case, the incident sound theoretically strikes the surface of the material from all possible angles -- though the acoustipy implementation defaults to angles between 0 and 79, as seen in literature on the topic.
+
+The acoustipy implementation for both cases can be found [here](https://jakep72.github.io/acoustipy/AcousticTMM/#src.acoustipy.TMM.AcousticTMM.reflection).
 
 ### Normal Incidence
 
