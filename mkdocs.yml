@@ -71,4 +71,8 @@ nav:
         - MAA Model: Theory/MAA_MPP_Model.md
         - Equivalent Fluid Model: Theory/EF_MPP_Model.md
       - Transfer Matrices: Theory/TMM_Theory.md
+      - Acoustic Indicators:
+        - Reflection: Theory/Reflection_Theory.md
+        - Absorption: Theory/Absorption_Theory.md
+        - Transmission Loss: Theory/Transmission_Theory.md
 
