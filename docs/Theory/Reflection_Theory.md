@@ -24,7 +24,7 @@ First, the surface impedence $(Z_{s})$ is calculated:
 Z_{s} = \frac{T_{11}}{T_{21}}  
 \]
 
-Then the reflection coeffients are:
+Then the reflection coefficients are:
 
 \[
 R = \frac{Z_{s}-Z_{0}}{Z_{s}-Z_{0}}  
