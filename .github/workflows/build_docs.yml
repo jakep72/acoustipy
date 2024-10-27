@@ -27,4 +27,5 @@ jobs:
       #       mkdocs-material-
       - run: pip install mkdocs-material==9.5.0
       - run: pip install mkdocstrings-python==1.7.5
+      - run: pip install griffe==0.38.0
       - run: mkdocs gh-deploy --force
