@@ -1,11 +1,12 @@
-import numpy as np
+# import numpy as np
+import torch
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
 from acoustipy.Database import AcoustiBase
 
 
-class AcousticTMM():
+class AcousticTMM(torch.nn.Module):
     """
     Create an AcousticTMM object
     
@@ -91,7 +92,7 @@ class AcousticTMM():
         if abs(round((angles[1]-angles[0])%angles[2]/angles[2])-((angles[1]-angles[0])%angles[2]/angles[2])) >  1e-6:
             raise ValueError("Angle step size must be a multiple of the angle range!")
         
-        
+        super().__init__()
         self.temp = air_temperature
         self.speed = sound_speed
         self.density = air_density
@@ -100,7 +101,7 @@ class AcousticTMM():
         self.fs = fs
         self.incidence = incidence
         self.angles = angles
-        self.THIRD_OCTAVE_PREFERRED = np.asarray([16,20,25,31.5,40,50,63,
+        self.THIRD_OCTAVE_PREFERRED = torch.asarray([16,20,25,31.5,40,50,63,
                                                   80,100,125,160,200,250,
                                                   315,400,500,630,800,1000,
                                                   1250,1600,2000,2500,3150,
@@ -112,7 +113,7 @@ class AcousticTMM():
         self.viscosity = viscosity
         self.Pr = Pr
         self.P0 = P0
-        self._custom_freq =  np.arange(self.fmin,self.fmax+self.fs,self.fs)
+        self._custom_freq =  torch.arange(self.fmin,self.fmax+self.fs,self.fs)
         self.layers = []
         
 
@@ -129,7 +130,7 @@ class AcousticTMM():
     def ang_freq(self):
         
         #angular frequency
-        w = 2.0*np.pi*self.frequency
+        w = 2.0*torch.pi*self.frequency
         return(w)
         
     @property    
@@ -194,9 +195,9 @@ class AcousticTMM():
 
     
     def _create_layer_TM(self,
-                         Zp: np.ndarray,
-                         kp: np.ndarray,
-                         thickness: float) -> np.ndarray:
+                         Zp: torch.Tensor,
+                         kp: torch.Tensor,
+                         thickness: float) -> torch.Tensor:
         """
         Creates the transfer matrix for an individual layer in either normal or diffuse sound fields
 
@@ -219,39 +220,39 @@ class AcousticTMM():
         
         """
         if self.incidence == "Normal":
-            TM = np.zeros((2,2,len(self.frequency)),dtype = 'complex_')
-            TM[0][0] = np.cos(kp*thickness)
-            TM[0][1] = 1j*Zp*np.sin(kp*thickness)
-            TM[1][0] = (1j/Zp)*np.sin(kp*thickness)
-            TM[1][1] = np.cos(kp*thickness)
+            TM = torch.zeros((2,2,len(self.frequency)),dtype = torch.complex64)
+            TM[0][0] = torch.cos(kp*thickness)
+            TM[0][1] = 1j*Zp*torch.sin(kp*thickness)
+            TM[1][0] = (1j/Zp)*torch.sin(kp*thickness)
+            TM[1][1] = torch.cos(kp*thickness)
             
             return (TM)
 
         elif self.incidence == "Diffuse":
-            angles = np.arange(self.angles[0],self.angles[1],self.angles[2])
-            vs = np.sin(np.radians(angles))
-            TM = np.zeros((2,2,len(self.frequency),len(angles)),dtype = 'complex_')
-            kpx = np.zeros((len(self.frequency),len(angles)),dtype = 'complex_')
+            angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
+            vs = torch.sin(torch.deg2rad(angles))
+            TM = torch.zeros((2,2,len(self.frequency),len(angles)),dtype = torch.complex64)
+            kpx = torch.zeros((len(self.frequency),len(angles)),dtype = torch.complex64)
             
-            Kp = np.einsum('ij,ij -> ij',np.tile(kp[:,None], (1,len(angles))),np.tile(kp[:,None], (1,len(angles))))
-            K0 = np.einsum('ij,ij -> ij',np.tile(self.k0[:,None],(1,len(angles))),np.tile(self.k0[:,None],(1,len(angles))))
-            VS = np.einsum('ij,ij -> ij',vs[None,:],vs[None,:])
-            kpx[:,:] = np.sqrt((Kp)-(np.einsum('ij,ij -> ij',K0,VS)))
+            Kp = torch.einsum('ij,ij -> ij',torch.tile(kp[:,None], (1,len(angles))),torch.tile(kp[:,None], (1,len(angles))))
+            K0 = torch.einsum('ij,ij -> ij',torch.tile(self.k0[:,None],(1,len(angles))),torch.tile(self.k0[:,None],(1,len(angles))))
+            VS = torch.einsum('ij,ij -> ij',vs[None,:],vs[None,:])
+            kpx[:,:] = torch.sqrt((Kp)-(torch.einsum('ij,ij -> ij',K0,VS)))
 
-            sin = 1j*np.sin(kpx*thickness)
-            cos = np.cos(kpx*thickness)
-            offset = np.einsum('ij,ij,ij -> ij',Zp[:, None],kp[:, None],1/kpx)
+            sin = 1j*torch.sin(kpx*thickness)
+            cos = torch.cos(kpx*thickness)
+            offset = torch.einsum('ij,ij,ij -> ij',Zp[:, None],kp[:, None],1/kpx)
 
             
             TM[0,0,:,:] = cos
-            TM[0,1,:,:] = np.einsum('ij,ij -> ij',offset,sin)
-            TM[1,0,:,:] = np.einsum('ij,ij -> ij',sin,1/offset)
+            TM[0,1,:,:] = torch.einsum('ij,ij -> ij',offset,sin)
+            TM[1,0,:,:] = torch.einsum('ij,ij -> ij',sin,1/offset)
             TM[1,1,:,:] = cos
             
             return(TM)
         
     def _create_Maa_MPP_TM(self,
-                           Zp: np.ndarray) -> np.ndarray:
+                           Zp: torch.Tensor) -> torch.Tensor:
         """
         Creates the transfer matrix for a Maa microperforated panel layer in either normal or diffuse sound fields
 
@@ -268,7 +269,7 @@ class AcousticTMM():
         
         """
         if self.incidence == "Normal":
-            TM = np.zeros((2,2,len(self.frequency)),dtype = 'complex_')
+            TM = torch.zeros((2,2,len(self.frequency)),dtype = torch.complex64)
             TM[0][0] = 1
             TM[0][1] = Zp
             TM[1][0] = 0
@@ -277,15 +278,15 @@ class AcousticTMM():
             return (TM)
         
         elif self.incidence == "Diffuse":
-            angles = np.arange(self.angles[0],self.angles[1],self.angles[2])
+            angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
             
-            TM = np.zeros((2,2,len(self.frequency),len(angles)),dtype = 'complex_')
+            TM = torch.zeros((2,2,len(self.frequency),len(angles)),dtype = torch.complex64)
 
             count = 0
             for theta in angles:
                
                 TM[0,0,:,count] = 1
-                TM[0,1,:,count] = Zp*np.cos(np.radians(theta))
+                TM[0,1,:,count] = Zp*torch.cos(torch.deg2rad(theta))
                 TM[1,0,:,count] = 0
                 TM[1,1,:,count] = 1
                 count += 1
@@ -301,7 +302,7 @@ class AcousticTMM():
                        thermal_permeability: float,
                        thermal_tortuosity: float,
                        viscous_tortuosity: float,
-                       model: str) -> tuple[np.ndarray, np.ndarray]:
+                       model: str) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Calculates the dynamic mass density and bulk modulus for porous, equivalent fluid models.
 
@@ -401,10 +402,10 @@ class AcousticTMM():
             pprime = 1
             mprime = 1
             
-            Fw = 1-p+(p*np.sqrt(1+((1j*m*wp)/(2*(p**2)))))
+            Fw = 1-p+(p*torch.sqrt(1+((1j*m*wp)/(2*(p**2)))))
             aw = tau*(1+(Fw/(1j*wp)))
             
-            Fwp = 1-pprime+(pprime*np.sqrt(1+((1j*mprime*wpp)/(2*(pprime**2)))))
+            Fwp = 1-pprime+(pprime*torch.sqrt(1+((1j*mprime*wpp)/(2*(pprime**2)))))
             bw = self.gamma_temp-((self.gamma_temp-1)*((1+(Fwp/(1j*wpp)))**-1)) 
             
             peff = self.density_temp*aw/phi
@@ -419,10 +420,10 @@ class AcousticTMM():
             pprime = 1
             mprime = (8*kprime)/(phi*(tcl**2))
 
-            Fw = 1-p+(p*np.sqrt(1+((1j*m*wp)/(2*(p**2)))))
+            Fw = 1-p+(p*torch.sqrt(1+((1j*m*wp)/(2*(p**2)))))
             aw = tau*(1+(Fw/(1j*wp)))
             
-            Fwp = 1-pprime+(pprime*np.sqrt(1+((1j*mprime*wpp)/(2*(pprime**2)))))
+            Fwp = 1-pprime+(pprime*torch.sqrt(1+((1j*mprime*wpp)/(2*(pprime**2)))))
             bw = self.gamma_temp-((self.gamma_temp-1)*((1+(Fwp/(1j*wpp)))**-1)) 
             
             peff = self.density_temp*aw/phi
@@ -437,10 +438,10 @@ class AcousticTMM():
             mprime = (8*kprime)/(phi*(tcl**2))
             pprime = mprime/((4*(tauprime-1)))
             
-            Fw = 1-p+(p*np.sqrt(1+((1j*m*wp)/(2*(p**2)))))
+            Fw = 1-p+(p*torch.sqrt(1+((1j*m*wp)/(2*(p**2)))))
             aw = tau*(1+(Fw/(1j*wp)))
             
-            Fwp = 1-pprime+(pprime*np.sqrt(1+((1j*mprime*wpp)/(2*(pprime**2)))))
+            Fwp = 1-pprime+(pprime*torch.sqrt(1+((1j*mprime*wpp)/(2*(pprime**2)))))
             bw = self.gamma_temp-((self.gamma_temp-1)*((1+(Fwp/(1j*wpp)))**-1)) 
             
             peff = self.density_temp*aw/phi
@@ -451,7 +452,7 @@ class AcousticTMM():
     def Add_Air_Layer(self,
                       thickness: float=400,
                       save_layer: bool = False,
-                      layer_name: str = None) -> list[np.ndarray, float, str]:
+                      layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
         Define an air gap layer
 
@@ -476,7 +477,7 @@ class AcousticTMM():
             params = [layer_name,'AIR','null',thickness,'null','null','null','null','null','null','null','null','null','null','null','null','null']
             self._layer_to_db(params)
 
-        Zp = np.full(len(self.frequency),self.Z0)
+        Zp = torch.full_like(self.frequency,self.Z0)
         thickness = thickness / 1000
         TM = self._create_layer_TM(Zp,self.k0,thickness)
         
@@ -486,7 +487,7 @@ class AcousticTMM():
                      thickness: float,
                      flow_resistivity: float,
                      save_layer: bool = False,
-                     layer_name: str = None) -> list[np.ndarray, float, str]:
+                     layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
         Define a layer using the Delaney-Bazley Model
 
@@ -518,8 +519,8 @@ class AcousticTMM():
         
         dyns = self._calc_dynamics(flow_resistivity, 0, 0, 0, 0, 0, 0, 0, model='DB')
       
-        Zp = np.sqrt(dyns[0]*dyns[1])
-        kp = self.ang_freq*np.sqrt(dyns[0]/dyns[1])
+        Zp = torch.sqrt(dyns[0]*dyns[1])
+        kp = self.ang_freq*torch.sqrt(dyns[0]/dyns[1])
 
         TM = self._create_layer_TM(Zp,kp,thickness)
 
@@ -529,7 +530,7 @@ class AcousticTMM():
                       thickness: float,
                       flow_resistivity: float,
                       save_layer: bool = False,
-                      layer_name: str = None) -> list[np.ndarray, float, str]:
+                      layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
         Define a layer using the Delaney-Bazley-Miki Model
 
@@ -561,8 +562,8 @@ class AcousticTMM():
 
         dyns = self._calc_dynamics(flow_resistivity, 0, 0, 0, 0, 0, 0, 0, model='DB')
       
-        Zp = np.sqrt(dyns[0]*dyns[1])
-        kp = self.ang_freq*np.sqrt(dyns[0]/dyns[1])
+        Zp = torch.sqrt(dyns[0]*dyns[1])
+        kp = self.ang_freq*torch.sqrt(dyns[0]/dyns[1])
         
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -577,7 +578,7 @@ class AcousticTMM():
                       viscous_characteristic_length: float,
                       thermal_characteristic_length: float,
                       save_layer: bool = False,
-                      layer_name: str = None) -> list[np.ndarray, float, str]:
+                      layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
         Define a layer using the Johnson-Champoux-Allard Model
 
@@ -627,8 +628,8 @@ class AcousticTMM():
         
         dyns = self._calc_dynamics(fr, phi, tau, vcl, tcl, 0, 0, 0, model='JCA')
       
-        Zp = np.sqrt(dyns[0]*dyns[1])
-        kp = self.ang_freq*np.sqrt(dyns[0]/dyns[1])
+        Zp = torch.sqrt(dyns[0]*dyns[1])
+        kp = self.ang_freq*torch.sqrt(dyns[0]/dyns[1])
         
         TM = self._create_layer_TM(Zp,kp,thickness)
          
@@ -643,7 +644,7 @@ class AcousticTMM():
                        thermal_characteristic_length: float,
                        thermal_permeability: float,
                        save_layer: bool = False,
-                       layer_name: str = None) -> list[np.ndarray, float, str]:
+                       layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
         Define a layer using the Johnson-Champoux-Allard-Lafarge Model
 
@@ -697,8 +698,8 @@ class AcousticTMM():
 
         dyns = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, 0, 0, model='JCAL')
         
-        Zp = np.sqrt(dyns[0]*dyns[1])
-        kp = self.ang_freq*np.sqrt(dyns[0]/dyns[1])
+        Zp = torch.sqrt(dyns[0]*dyns[1])
+        kp = self.ang_freq*torch.sqrt(dyns[0]/dyns[1])
         
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -715,7 +716,7 @@ class AcousticTMM():
                         thermal_tortuosity: float,
                         viscous_tortuosity: float,
                         save_layer: bool = False,
-                        layer_name: str = None) -> list[np.ndarray, float, str]:
+                        layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
         Define a layer using the Johnson-Champoux-Allard-Pride-Lafarge Model
 
@@ -777,8 +778,8 @@ class AcousticTMM():
         
         dyns = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model='JCAPL')
         
-        Zp = np.sqrt(dyns[0]*dyns[1])
-        kp = self.ang_freq*np.sqrt(dyns[0]/dyns[1])
+        Zp = torch.sqrt(dyns[0]*dyns[1])
+        kp = self.ang_freq*torch.sqrt(dyns[0]/dyns[1])
 
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -790,7 +791,7 @@ class AcousticTMM():
                               median_pore_size: float,
                               pore_size_distribution: float,
                               save_layer: bool = False,
-                              layer_name: str = None) -> list[np.ndarray, float, str]:
+                              layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
         Define a layer using the Horoshenkov et al Model
         
@@ -829,20 +830,20 @@ class AcousticTMM():
         psd = pore_size_distribution
         phi = porosity
 
-        X = (psd*np.log(2))**2
-        tau = np.exp(4*X)
+        X = (psd*torch.log(2))**2
+        tau = torch.exp(4*X)
         Z = phi*(mps**2)/(8*tau)
         
         
-        fr = (self.viscosity_temp/Z)*np.exp(6*X)
-        vcl = mps*np.exp((-5/2)*X)
-        tcl = mps*np.exp((3/2)*X)
-        kprime = Z/np.exp(-6*X)
+        fr = (self.viscosity_temp/Z)*torch.exp(6*X)
+        vcl = mps*torch.exp((-5/2)*X)
+        tcl = mps*torch.exp((3/2)*X)
+        kprime = Z/torch.exp(-6*X)
         
         dyns = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, 0, 0, model='JCAL')
         
-        Zp = np.sqrt(dyns[0]*dyns[1])
-        kp = self.ang_freq*np.sqrt(dyns[0]/dyns[1])
+        Zp = torch.sqrt(dyns[0]*dyns[1])
+        kp = self.ang_freq*torch.sqrt(dyns[0]/dyns[1])
         
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -861,7 +862,7 @@ class AcousticTMM():
                             thermal_tortuosity: float=0,
                             viscous_tortuosity: float=0,
                             save_layer: bool = False,
-                            layer_name: str = None) -> list[np.ndarray, float, str]:
+                            layer_name: str = None) -> list[torch.Tensor, float, str]:
                  
         """
         Define a limp Biot layer, using any of the equivalent fluid models
@@ -957,8 +958,8 @@ class AcousticTMM():
         
         rho_eq_limp = 1/rho_eq_limp
         
-        Zp = np.sqrt(rho_eq_limp*keff)
-        kp = self.ang_freq*np.sqrt(rho_eq_limp/keff)
+        Zp = torch.sqrt(rho_eq_limp*keff)
+        kp = self.ang_freq*torch.sqrt(rho_eq_limp/keff)
 
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -977,7 +978,7 @@ class AcousticTMM():
                              thermal_tortuosity: float=0,
                              viscous_tortuosity: float=0,
                              save_layer: bool = False,
-                             layer_name: str = None) -> list[np.ndarray, float, str]:
+                             layer_name: str = None) -> list[torch.Tensor, float, str]:
                 
         """
         Define a rigid Biot layer, using any of the equivalent fluid models
@@ -1075,8 +1076,8 @@ class AcousticTMM():
         
         rho_eq_limp = 1/rho_eq_limp
         
-        Zp = np.sqrt(rho_eq_limp*keff)
-        kp = self.ang_freq*np.sqrt(rho_eq_limp/keff)
+        Zp = torch.sqrt(rho_eq_limp*keff)
+        kp = self.ang_freq*torch.sqrt(rho_eq_limp/keff)
 
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -1088,7 +1089,7 @@ class AcousticTMM():
                              flow_resistivity: float,
                              porosity: float,
                              save_layer: bool = False,
-                             layer_name: str = None) -> list[np.ndarray, float, str]:
+                             layer_name: str = None) -> list[torch.Tensor, float, str]:
         
 
         
@@ -1132,8 +1133,8 @@ class AcousticTMM():
         keff = self.P0/phi
         peff = ((self.density_temp/phi)+(fr/(1j*w)))
 
-        Zp = np.sqrt(peff*keff)
-        kp = self.ang_freq*np.sqrt(peff/keff)
+        Zp = torch.sqrt(peff*keff)
+        kp = self.ang_freq*torch.sqrt(peff/keff)
         
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -1144,7 +1145,7 @@ class AcousticTMM():
                           pore_diameter: float,
                           c_to_c_dist: float,
                           save_layer: bool = False,
-                          layer_name: str = None) -> list[np.ndarray, float, str]:
+                          layer_name: str = None) -> list[torch.Tensor, float, str]:
         
         """
         Define a microperforated layer using Maa's model
@@ -1183,13 +1184,13 @@ class AcousticTMM():
         
         w = self.ang_freq
         
-        x = d*np.sqrt((w*self.density_temp)/(4*self.viscosity_temp))
-        phi = (np.pi/4)*((d/b)**2)
+        x = d*torch.sqrt((w*self.density_temp)/(4*self.viscosity_temp))
+        phi = (torch.pi/4)*((d/b)**2)
         
-        x = d/2*np.sqrt(w*self.density_temp/(self.viscosity_temp))
-        r1 = np.sqrt(1+x**2/32)+np.sqrt(2)/32*x*d/thickness
+        x = d/2*torch.sqrt(w*self.density_temp/(self.viscosity_temp))
+        r1 = torch.sqrt(1+x**2/32)+torch.sqrt(2)/32*x*d/thickness
         r = 32*self.viscosity_temp/phi*thickness/d**2*r1
-        m1 = 1+1/np.sqrt(1+x**2/2)+0.85*d/thickness
+        m1 = 1+1/torch.sqrt(1+x**2/2)+0.85*d/thickness
         m = self.density_temp*thickness/phi*m1
         
         Zp = (r+(1j*w*m))
@@ -1203,7 +1204,7 @@ class AcousticTMM():
                          pore_diameter: float,
                          c_to_c_dist: float,
                          save_layer: bool = False,
-                         layer_name: str = None) -> list[np.ndarray, float, str]:
+                         layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
         Define a microperforated layer using an equivalent fluid model
 
@@ -1239,10 +1240,10 @@ class AcousticTMM():
         d = pore_diameter/1000
         b = c_to_c_dist/1000
 
-        phi = (np.pi/4)*((d/b)**2)
+        phi = (torch.pi/4)*((d/b)**2)
 
-        eps = 2.0*np.sqrt(phi/np.pi)
-        fok = (1-(1.13*eps)-(0.09*(eps**2))+(0.27*(eps**3)))*(4*d/3*np.pi)
+        eps = 2.0*torch.sqrt(phi/torch.pi)
+        fok = (1-(1.13*eps)-(0.09*(eps**2))+(0.27*(eps**3)))*(4*d/3*torch.pi)
         fr = (32*self.viscosity_temp)/(phi*(d**2))
         
         vcl = d/2
@@ -1252,8 +1253,8 @@ class AcousticTMM():
         
         dyns = self._calc_dynamics(fr, phi, tau, vcl, tcl, 0, 0, 0, model='JCA')
       
-        Zp = np.sqrt(dyns[0]*dyns[1])
-        kp = self.ang_freq*np.sqrt(dyns[0]/dyns[1])
+        Zp = torch.sqrt(dyns[0]*dyns[1])
+        kp = self.ang_freq*torch.sqrt(dyns[0]/dyns[1])
         
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -1264,7 +1265,7 @@ class AcousticTMM():
                             gap_file: str,
                             sample_thickness: float,
                             air_gap_thickness: float,
-                            measurement: str = 'reflection') -> list[np.ndarray, float, str]:
+                            measurement: str = 'reflection') -> list[torch.Tensor, float, str]:
         
 
         
@@ -1314,15 +1315,15 @@ class AcousticTMM():
             Zs_NG = self.Z0*((1+no_gap_data[:,1])/(1-no_gap_data[:,1]))
             Zs_G = self.Z0*((1+gap_data[:,1])/(1-gap_data[:,1]))
         
-        if np.array_equal(no_gap_data[:,0],gap_data[:,0]) != True:
+        if torch.array_equal(no_gap_data[:,0],gap_data[:,0]) != True:
             raise ValueError("Frequencies must match between no gap and gap curves")
             
-        T11A = np.cos(self.k0*air_thickness)
-        T21A = (1j/self.Z0)*np.sin(self.k0*air_thickness)
+        T11A = torch.cos(self.k0*air_thickness)
+        T21A = (1j/self.Z0)*torch.sin(self.k0*air_thickness)
         Zs_A = T11A/T21A
 
-        Zp = np.sqrt((Zs_G*(Zs_NG+Zs_A))-(Zs_NG*Zs_A))
-        kp = np.arctan(Zp/(1j*Zs_NG))/thickness
+        Zp = torch.sqrt((Zs_G*(Zs_NG+Zs_A))-(Zs_NG*Zs_A))
+        kp = torch.arctan(Zp/(1j*Zs_NG))/thickness
 
         TM = self._create_layer_TM(Zp,kp,thickness)
         
@@ -1334,7 +1335,7 @@ class AcousticTMM():
         return([TM,thickness,None]) 
         
     def Add_Layer_From_Database(self,
-                                layer_name: str) -> list[np.ndarray, float, str]:
+                                layer_name: str) -> list[torch.Tensor, float, str]:
 
         '''
         Define a layer from properties that have been saved to a database.
@@ -1408,7 +1409,7 @@ class AcousticTMM():
             return(layer)
 
     def assemble_from_database(self,
-                               name: str) -> list[np.ndarray, float]:
+                               name: str) -> list[torch.Tensor, float]:
         '''
         Define a multilayer structure that has been saved to a database.
 
@@ -1441,7 +1442,7 @@ class AcousticTMM():
                            *kwargs,
                            save_structure: bool=False,
                            structure_name: str=None,
-                           db_flag: bool=False) -> list[np.ndarray, float]:
+                           db_flag: bool=False) -> list[torch.Tensor, float]:
         """
         Calculates the total transfer matrix for a structure of 'n' number of layers.  The structure is defined from left to right --> left being the face
         of the structure where sound impinges on the surface and right being the back or bottom of the structure that sound propagates through.
@@ -1508,9 +1509,9 @@ class AcousticTMM():
                 return([Tt,thickness])
             
             elif len(transfer_matrices) > 1:
-                Tt = np.einsum('ijn,jkn->ikn', transfer_matrices[0], transfer_matrices[1])
+                Tt = torch.einsum('ijn,jkn->ikn', transfer_matrices[0], transfer_matrices[1])
                 for i in range(len(transfer_matrices)-2):
-                    Tt = np.einsum('ijn,jkn->ikn', Tt, transfer_matrices[i+2])
+                    Tt = torch.einsum('ijn,jkn->ikn', Tt, transfer_matrices[i+2])
                     
                 return([Tt,thickness])
             
@@ -1524,9 +1525,9 @@ class AcousticTMM():
                 return([Tt,thickness])
             
             elif len(transfer_matrices) > 1:
-                Tt = np.einsum('ijnm,jknm->iknm', transfer_matrices[0], transfer_matrices[1])
+                Tt = torch.einsum('ijnm,jknm->iknm', transfer_matrices[0], transfer_matrices[1])
                 for i in range(len(transfer_matrices)-2):
-                    Tt = np.einsum('ijnm,jknm->iknm', Tt, transfer_matrices[i+2])
+                    Tt = torch.einsum('ijnm,jknm->iknm', Tt, transfer_matrices[i+2])
                     
                 return([Tt,thickness])
             
@@ -1534,7 +1535,7 @@ class AcousticTMM():
                 raise ValueError("Error: Structure Not Defined. Specify each layer in assemble_structure.")
 
     def reflection(self,
-                   transfer_matrix: list) -> np.ndarray:
+                   transfer_matrix: list) -> torch.Tensor:
         """
         Calculates the frequency dependent reflection coefficients of the structure.
 
@@ -1556,29 +1557,29 @@ class AcousticTMM():
     
             R = (Zst-self.Z0)/(Zst+self.Z0)
             
-            curve = np.column_stack((self.frequency,R))
+            curve = torch.column_stack((self.frequency,R))
             return (curve)
         
         elif self.incidence == "Diffuse":
             
-            angles = np.arange(self.angles[0],self.angles[1],self.angles[2])
-            v = np.cos(np.radians(angles))
+            angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
+            v = torch.cos(torch.deg2rad(angles))
             
             Zst = Tt[0][0][:][:]/ Tt[1][0][:][:]
             r = ((Zst*v)-self.Z0)/((Zst*v)+self.Z0)
             
-            thetas = np.cos(np.radians(angles))*np.sin(np.radians(angles))
+            thetas = torch.cos(torch.deg2rad(angles))*torch.sin(torch.deg2rad(angles))
             
-            num = np.sum(r*thetas,1)
+            num = torch.sum(r*thetas,1)
             denom = sum(thetas)
             
             R = num/denom
 
-            curve = np.column_stack((self.frequency,R))
+            curve = torch.column_stack((self.frequency,R))
             return (curve)
     
     def absorption(self,
-                   transfer_matrix: list) -> np.ndarray:
+                   transfer_matrix: list) -> torch.Tensor:
         """
         Calculates the frequency dependent absorption coefficients of the structure.
 
@@ -1601,32 +1602,34 @@ class AcousticTMM():
             R = (Zst-self.Z0)/(Zst+self.Z0)
     
             A = 1-abs(R)**2
-            curve = np.column_stack((self.frequency,A))
+            curve = torch.column_stack((self.frequency,A))
             
             return (curve)
         
         elif self.incidence == "Diffuse":
             
-            angles = np.arange(self.angles[0],self.angles[1],self.angles[2])
-            v = np.cos(np.radians(angles))
+            angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
+            v = torch.cos(torch.deg2rad(angles))
             
             Zst = Tt[0][0][:][:]/ Tt[1][0][:][:]
             R = ((Zst*v)-self.Z0)/((Zst*v)+self.Z0)
             
-            a = 1-abs(R)**2
+            a = 1-torch.abs(R)**2
             
-            thetas = np.cos(np.radians(angles))*np.sin(np.radians(angles))
             
-            num = np.sum(a*thetas,1)
-            denom = sum(thetas)
+            thetas = torch.cos(torch.deg2rad(angles))*torch.sin(torch.deg2rad(angles))
+  
+            num = torch.sum(a*thetas,1)
+            denom = torch.sum(thetas)
             
             A = num/denom
-            curve = np.column_stack((self.frequency,A))
+            
+            curve = torch.column_stack((self.frequency,A))
             
             return (curve)
         
     def transmission_loss(self,
-                          transfer_matrix: list) -> np.ndarray:
+                          transfer_matrix: list) -> torch.Tensor:
         """
         Calculates the frequency dependent transmission coefficients of the structure.
 
@@ -1646,41 +1649,41 @@ class AcousticTMM():
         
         if self.incidence == 'Normal':
             
-            T = (2.0*np.exp(1j*self.k0*thickness))/(Tt[0][0]+(Tt[0][1]/self.Z0)+(self.Z0*Tt[1][0])+Tt[1][1])
+            T = (2.0*torch.exp(1j*self.k0*thickness))/(Tt[0][0]+(Tt[0][1]/self.Z0)+(self.Z0*Tt[1][0])+Tt[1][1])
             Te = abs(T)**2
-            TL = 10*np.log10(1/Te)
+            TL = 10*torch.log10(1/Te)
 
             
-            curve = np.column_stack((self.frequency,TL))
+            curve = torch.column_stack((self.frequency,TL))
             return (curve)
         
         elif self.incidence == "Diffuse":
             
-            angles = np.arange(self.angles[0],self.angles[1],self.angles[2])
-            v = np.cos(np.radians(angles))
+            angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
+            v = torch.cos(torch.deg2rad(angles))
             
-            t1 = 2.0*np.exp(1j*self.k0*thickness)
-            t1 = np.tile(t1,(int((self.angles[1]-self.angles[0])/self.angles[2]),1)).T
+            t1 = 2.0*torch.exp(1j*self.k0*thickness)
+            t1 = torch.tile(t1,(int((self.angles[1]-self.angles[0])/self.angles[2]),1)).T
             t2 = (Tt[0][0][:][:]+(Tt[0][1][:][:]*v/self.Z0)+(self.Z0*Tt[1][0][:][:]/v)+Tt[1][1][:][:])
             T = t1/t2 
             Te = abs(T)**2
             
             
-            thetas = np.cos(np.radians(angles))*np.sin(np.radians(angles))
+            thetas = torch.cos(torch.deg2rad(angles))*torch.sin(torch.deg2rad(angles))
             
-            num = np.sum(Te*thetas,1)
+            num = torch.sum(Te*thetas,1)
             denom = sum(thetas)
             
             Tz = num/denom
-            TL = 10*np.log10(1/Tz)
+            TL = 10*torch.log10(1/Tz)
 
-            curve = np.column_stack((self.frequency,TL))
+            curve = torch.column_stack((self.frequency,TL))
             
             return (curve)
     
     def octave_bands(self,
-                     curve: np.ndarray,
-                     kind: str='THIRD_OCTAVE') -> np.ndarray:
+                     curve: torch.Tensor,
+                     kind: str='THIRD_OCTAVE') -> torch.Tensor:
         """
         Calculates the third octave or octave band absorption or transmission spectrums
 
@@ -1713,9 +1716,9 @@ class AcousticTMM():
                 mid2 = mid2*(2**(1))
                 spec_mid.append(mid2)
             
-            spec_mid = np.asarray(spec_mid)
+            spec_mid = torch.asarray(spec_mid)
 
-            bands = np.column_stack((self.OCTAVE_PREFERRED,spec_mid))
+            bands = torch.column_stack((self.OCTAVE_PREFERRED,spec_mid))
             
             lower = []
             upper = []
@@ -1723,22 +1726,22 @@ class AcousticTMM():
                 lower.append(n/((2**(1/2))**(1/1)))
                 upper.append(n*((2**(1/2))**(1/1)))
             
-            lower = np.asarray(lower)
-            upper = np.asarray(upper)
+            lower = torch.asarray(lower)
+            upper = torch.asarray(upper)
             
-            bands = np.column_stack((bands,lower))
-            bands = np.column_stack((bands,upper))
+            bands = torch.column_stack((bands,lower))
+            bands = torch.column_stack((bands,upper))
             
-            bands = bands[np.where((bands[:,2] > fl) & (bands[:,2] < fu))]
+            bands = bands[torch.where((bands[:,2] > fl) & (bands[:,2] < fu))]
 
             octave_abs = []
             for i in range(len(bands)):    
-                curve_range = curve[np.where((curve[:,0]>=bands[i,2]) & (curve[:,0]<=bands[i,3]))]
-                ave = np.mean(curve_range[:,1])
+                curve_range = curve[torch.where((curve[:,0]>=bands[i,2]) & (curve[:,0]<=bands[i,3]))]
+                ave = torch.mean(curve_range[:,1])
                 octave_abs.append(ave)
             
-            octaves = np.column_stack((bands[:,0],octave_abs))
-            octaves = octaves[~np.isnan(octaves).any(axis=1)]
+            octaves = torch.column_stack((bands[:,0],octave_abs))
+            octaves = octaves[~torch.isnan(octaves).any(axis=1)]
 
             return(octaves)
             
@@ -1757,9 +1760,9 @@ class AcousticTMM():
                 mid2 = mid2*(2**(1/3))
                 spec_mid.append(mid2)
             
-            spec_mid = np.asarray(spec_mid)
+            spec_mid = torch.asarray(spec_mid)
 
-            bands = np.column_stack((self.THIRD_OCTAVE_PREFERRED,spec_mid))
+            bands = torch.column_stack((self.THIRD_OCTAVE_PREFERRED,spec_mid))
             
             lower = []
             upper = []
@@ -1767,27 +1770,27 @@ class AcousticTMM():
                 lower.append(n/((2**(1/2))**(1/3)))
                 upper.append(n*((2**(1/2))**(1/3)))
             
-            lower = np.asarray(lower)
-            upper = np.asarray(upper)
+            lower = torch.asarray(lower)
+            upper = torch.asarray(upper)
             
-            bands = np.column_stack((bands,lower))
-            bands = np.column_stack((bands,upper))
+            bands = torch.column_stack((bands,lower))
+            bands = torch.column_stack((bands,upper))
             
-            bands = bands[np.where((bands[:,2] > fl) & (bands[:,2] < fu))]
+            bands = bands[torch.where((bands[:,2] > fl) & (bands[:,2] < fu))]
 
-            octave_abs = []
+            octave_abs = torch.empty(size=(len(bands),1))
             for i in range(len(bands)):    
-                curve_range = curve[np.where((curve[:,0]>=bands[i,2]) & (curve[:,0]<=bands[i,3]))]
-                ave = np.mean(curve_range[:,1])
-                octave_abs.append(ave)
+                curve_range = curve[torch.where((curve[:,0]>=bands[i,2]) & (curve[:,0]<=bands[i,3]))]
+                ave = torch.mean(curve_range[:,1])
+                octave_abs[i] = ave
             
-            octaves = np.column_stack((bands[:,0],octave_abs))
-            octaves = octaves[~np.isnan(octaves).any(axis=1)]
+            octaves = torch.column_stack((bands[:,0],octave_abs))
+            octaves = octaves[~torch.isnan(octaves).any(axis=1)]
             
             return(octaves)
         
     def SAA(self,
-            third_octave_curve: np.ndarray) -> float:
+            third_octave_curve: torch.Tensor) -> float:
         """
         Calculates the average sound absorption coefficient between the 200Hz and 2500Hz third octave frequency bands.  
 
@@ -1803,11 +1806,11 @@ class AcousticTMM():
         
         """
         try:
-            l = int(np.where((third_octave_curve[:,0] == 200))[0].item())
-            u = int(np.where((third_octave_curve[:,0] == 2500))[0].item()+1)
+            l = int(torch.where((third_octave_curve[:,0] == 200))[0].item())
+            u = int(torch.where((third_octave_curve[:,0] == 2500))[0].item()+1)
             
             saa = third_octave_curve[l:u,:]
-            saa = round(np.mean(saa[:,1]),3)
+            saa = round(torch.mean(saa[:,1]),3)
         except TypeError:
             raise ValueError('Unable to Calculate SAA with given frequency range!')
             return
@@ -1815,7 +1818,7 @@ class AcousticTMM():
         return(saa)
     
     def FFA(self,
-            third_octave_curve: np.ndarray) -> float:
+            third_octave_curve: torch.Tensor) -> float:
         """
         Calculates the four frequency average sound absorption coefficient at the 250Hz, 500Hz, 1000Hz, and 2000Hz third octave frequency bands.  
 
@@ -1833,13 +1836,13 @@ class AcousticTMM():
         absfreq = []
         for i in (250,500,1000,2000):
             try:
-                position = int(np.where((third_octave_curve[:,0] == i))[0].item())
-                absorption = third_octave_curve[position,1]
+                position = int(torch.where((third_octave_curve[:,0] == i))[0].item())
+                absorption = third_octave_curve[position,1].item()
                 absfreq.append(absorption)
             except TypeError:
                 raise ValueError('Unable to Calculate FFA with given frequency range!')
                 return
-            
+        print(absfreq)  
         ffa = round(sum(absfreq)/4,3)
         
         return(ffa)
@@ -1869,6 +1872,7 @@ class AcousticTMM():
         if kind == 'LINEAR':
             i=0
             for curve in curves:
+                curve = curve.detach().numpy()
                 if labels is not None:
                     ax.plot(curve[:,0],curve[:,1],label=labels[i])
                     ax.legend(loc="lower right")
@@ -1884,12 +1888,12 @@ class AcousticTMM():
             i=0
             for curve in curves:
                 if labels is not None:
-                    logfreq = np.log10(curve[:,0])
+                    logfreq = torch.log10(curve[:,0])
                     ax.plot(logfreq,curve[:,1],label=labels[i])
                     ax.legend(loc="lower right")
                     i+=1
                 else:
-                    logfreq = np.log10(curve[:,0])
+                    logfreq = torch.log10(curve[:,0])
                     ax.plot(logfreq,curve[:,1])
                     
             
@@ -1900,7 +1904,7 @@ class AcousticTMM():
 
     def to_csv(self,
                filename: str,
-               data: np.ndarray) -> None:
+               data: torch.Tensor) -> None:
         """
         Saves the frequency dependent reflection, absorption, or transmission coefficients of a structure to a csv file without headers.
 
@@ -1921,7 +1925,7 @@ class AcousticTMM():
             file = filename+".csv"
 
         save_path = os.path.join(file)
-        np.savetxt(save_path, data, delimiter=",")
+        torch.savetxt(save_path, data, delimiter=",")
 
     def load_to_array(self,
                       filename: str,
@@ -1940,15 +1944,15 @@ class AcousticTMM():
         """
         if type == 'complex':
             try:
-                data = np.asarray(pd.read_csv(filename,header=None).applymap(lambda s: np.complex128(s.replace('i', 'j'))))
+                data = torch.asarray(pd.read_csv(filename,header=None).applymap(lambda s: torch.complex128(s.replace('i', 'j'))))
             except Exception:
-                data = np.asarray(pd.read_excel(filename,header=None).applymap(lambda s: np.complex128(s.replace('i', 'j'))))
+                data = torch.asarray(pd.read_excel(filename,header=None).applymap(lambda s: torch.complex128(s.replace('i', 'j'))))
 
         elif type == 'float':
             try:
-                data = np.asarray(pd.read_csv(filename,header=None))
+                data = torch.asarray(pd.read_csv(filename,header=None))
             except Exception:
-                data = np.asarray(pd.read_excel(filename,header=None))  
+                data = torch.asarray(pd.read_excel(filename,header=None))  
         
         return (data)
     
