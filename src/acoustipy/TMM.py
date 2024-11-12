@@ -1,5 +1,6 @@
 # import numpy as np
 import torch
+import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
@@ -830,7 +831,7 @@ class AcousticTMM(torch.nn.Module):
         psd = pore_size_distribution
         phi = porosity
 
-        X = (psd*torch.log(2))**2
+        X = (psd*torch.log(torch.tensor(2)))**2
         tau = torch.exp(4*X)
         Z = phi*(mps**2)/(8*tau)
         
@@ -1188,7 +1189,7 @@ class AcousticTMM(torch.nn.Module):
         phi = (torch.pi/4)*((d/b)**2)
         
         x = d/2*torch.sqrt(w*self.density_temp/(self.viscosity_temp))
-        r1 = torch.sqrt(1+x**2/32)+torch.sqrt(2)/32*x*d/thickness
+        r1 = torch.sqrt(1+x**2/32)+torch.sqrt(torch.tensor(2))/32*x*d/thickness
         r = 32*self.viscosity_temp/phi*thickness/d**2*r1
         m1 = 1+1/torch.sqrt(1+x**2/2)+0.85*d/thickness
         m = self.density_temp*thickness/phi*m1
@@ -1237,8 +1238,8 @@ class AcousticTMM(torch.nn.Module):
             
         thickness = thickness/1000
         
-        d = pore_diameter/1000
-        b = c_to_c_dist/1000
+        d = torch.tensor(pore_diameter/1000)
+        b = torch.tensor(c_to_c_dist/1000)
 
         phi = (torch.pi/4)*((d/b)**2)
 
@@ -1810,7 +1811,7 @@ class AcousticTMM(torch.nn.Module):
             u = int(torch.where((third_octave_curve[:,0] == 2500))[0].item()+1)
             
             saa = third_octave_curve[l:u,:]
-            saa = round(torch.mean(saa[:,1]),3)
+            saa = torch.round(torch.mean(saa[:,1]),decimals=3)
         except TypeError:
             raise ValueError('Unable to Calculate SAA with given frequency range!')
             return
@@ -1925,7 +1926,7 @@ class AcousticTMM(torch.nn.Module):
             file = filename+".csv"
 
         save_path = os.path.join(file)
-        torch.savetxt(save_path, data, delimiter=",")
+        np.savetxt(save_path, data, delimiter=",")
 
     def load_to_array(self,
                       filename: str,
