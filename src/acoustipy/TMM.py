@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+import torch.backends.opt_einsum
 from acoustipy.Database import AcoustiBase
 
 
@@ -74,7 +75,8 @@ class AcousticTMM(torch.nn.Module):
                  Cv:float = 0.717425,
                  viscosity:float = 1.825e-05,
                  Pr:float = .7157,
-                 P0:float = 101325
+                 P0:float = 101325,
+                 device:str = 'cuda:0'
                  ):
         
         #Define limits on the frequency range and angles
@@ -114,6 +116,7 @@ class AcousticTMM(torch.nn.Module):
         self.viscosity = viscosity
         self.Pr = Pr
         self.P0 = P0
+        self.device = device
         self._custom_freq =  torch.arange(self.fmin,self.fmax+self.fs,self.fs)
         self.layers = []
         
@@ -220,8 +223,10 @@ class AcousticTMM(torch.nn.Module):
             Diffuse field --> 2 x 2 x len(frequency) x len(angles) array representing the transfer matrix
         
         """
+        kp = kp.to(self.device)
+        Zp = Zp.to(self.device)
         if self.incidence == "Normal":
-            TM = torch.zeros((2,2,len(self.frequency)),dtype = torch.complex64)
+            TM = torch.zeros((2,2,len(self.frequency)),dtype = torch.complex64).to(self.device)
             TM[0][0] = torch.cos(kp*thickness)
             TM[0][1] = 1j*Zp*torch.sin(kp*thickness)
             TM[1][0] = (1j/Zp)*torch.sin(kp*thickness)
@@ -231,12 +236,17 @@ class AcousticTMM(torch.nn.Module):
 
         elif self.incidence == "Diffuse":
             angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
-            vs = torch.sin(torch.deg2rad(angles))
-            TM = torch.zeros((2,2,len(self.frequency),len(angles)),dtype = torch.complex64)
-            kpx = torch.zeros((len(self.frequency),len(angles)),dtype = torch.complex64)
+            vs = torch.sin(torch.deg2rad(angles)).to(self.device)
+            TM = torch.zeros((2,2,len(self.frequency),len(angles)),dtype = torch.complex64).to(self.device)
+            kpx = torch.zeros((len(self.frequency),len(angles)),dtype = torch.complex64).to(self.device)
             
-            Kp = torch.einsum('ij,ij -> ij',torch.tile(kp[:,None], (1,len(angles))),torch.tile(kp[:,None], (1,len(angles))))
-            K0 = torch.einsum('ij,ij -> ij',torch.tile(self.k0[:,None],(1,len(angles))),torch.tile(self.k0[:,None],(1,len(angles))))
+            v1 = torch.tile(kp[:,None], (1,len(angles))).to(self.device)
+            v2 = torch.tile(kp[:,None], (1,len(angles))).to(self.device)
+            v3 = torch.tile(self.k0[:,None],(1,len(angles))).to(self.device)
+            v4 = torch.tile(self.k0[:,None],(1,len(angles))).to(self.device)
+
+            Kp = torch.einsum('ij,ij -> ij',v1,v2)
+            K0 = torch.einsum('ij,ij -> ij',v3,v4)
             VS = torch.einsum('ij,ij -> ij',vs[None,:],vs[None,:])
             kpx[:,:] = torch.sqrt((Kp)-(torch.einsum('ij,ij -> ij',K0,VS)))
 
@@ -1603,7 +1613,7 @@ class AcousticTMM(torch.nn.Module):
             R = (Zst-self.Z0)/(Zst+self.Z0)
     
             A = 1-abs(R)**2
-            curve = torch.column_stack((self.frequency,A))
+            curve = torch.column_stack((self.frequency,A.to('cpu')))
             
             return (curve)
         
@@ -1612,7 +1622,7 @@ class AcousticTMM(torch.nn.Module):
             angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
             v = torch.cos(torch.deg2rad(angles))
             
-            Zst = Tt[0][0][:][:]/ Tt[1][0][:][:]
+            Zst = (Tt[0][0][:][:]/ Tt[1][0][:][:]).to('cpu')
             R = ((Zst*v)-self.Z0)/((Zst*v)+self.Z0)
             
             a = 1-torch.abs(R)**2
