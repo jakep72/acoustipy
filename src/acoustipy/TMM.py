@@ -1843,7 +1843,6 @@ class AcousticTMM(torch.nn.Module):
             except TypeError:
                 raise ValueError('Unable to Calculate FFA with given frequency range!')
                 return
-        print(absfreq)  
         ffa = round(sum(absfreq)/4,3)
         
         return(ffa)
