@@ -1,11 +1,12 @@
 from src.acoustipy.TMM import AcousticTMM
 import time
+import timeit
 
 times = []
 # Create an AcousticTMM object, specifying a diffuse sound field at 20C
 for i in range(100):
-    s = time.time()
-    structure = AcousticTMM(incidence='Diffuse',air_temperature=20, device='cpu')
+    s = timeit.default_timer()
+    structure = AcousticTMM(incidence='Diffuse',air_temperature=20, device='cuda')
 
     # Define the layers of the material using various models
     layer1 = structure.Add_Resistive_Screen(thickness=1,flow_resistivity=100000,porosity=.86)
@@ -26,7 +27,7 @@ for i in range(100):
 
     # Calculate the four frequency average absorption
     FFA = structure.FFA(bands)
-    t = time.time()-s
+    t = timeit.default_timer() - s
     print(t)
     times.append(t)
 
