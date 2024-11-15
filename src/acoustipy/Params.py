@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import torch
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 import scipy.stats
@@ -330,19 +331,19 @@ class AcousticID():
 
         layer = dummy_struct.Add_JCA_Layer(t,fr,phi,tort,vcl,tcl)
         air = dummy_struct.Add_Air_Layer(thickness = air_gap)
-        dummy_struct.frequency = self.frequency
+        dummy_struct.frequency = torch.tensor(self.frequency).float()
         
         if self.opt_type == 'Gap' or self.opt_type == 'No Gap':
             s = dummy_struct.assemble_structure(layer,air)
-            predicted = dummy_struct.absorption(s)[:,1]
+            predicted = dummy_struct.absorption(s)[:,1].float().cpu().numpy()
             return(predicted)
         
         elif self.opt_type == 'Dual':
             no_gap_s = dummy_struct.assemble_structure(layer)
             gap_s = dummy_struct.assemble_structure(layer,air)
             
-            no_gap_pred = dummy_struct.absorption(no_gap_s)[:,1]
-            gap_pred = dummy_struct.absorption(gap_s)[:,1]
+            no_gap_pred = dummy_struct.absorption(no_gap_s)[:,1].float().cpu().numpy()
+            gap_pred = dummy_struct.absorption(gap_s)[:,1].float().cpu().numpy()
             
             return([no_gap_pred,gap_pred])
            

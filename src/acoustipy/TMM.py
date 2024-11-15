@@ -76,7 +76,7 @@ class AcousticTMM(torch.nn.Module):
                  viscosity:float = 1.825e-05,
                  Pr:float = .7157,
                  P0:float = 101325,
-                 device:str = 'cuda:0'
+                 device:str = 'cpu'
                  ):
         
         #Define limits on the frequency range and angles

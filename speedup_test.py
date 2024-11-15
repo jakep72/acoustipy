@@ -6,7 +6,7 @@ times = []
 # Create an AcousticTMM object, specifying a diffuse sound field at 20C
 for i in range(100):
     s = timeit.default_timer()
-    structure = AcousticTMM(incidence='Diffuse',air_temperature=20, device='cuda')
+    structure = AcousticTMM(incidence='Diffuse',air_temperature=20, device='cpu')
 
     # Define the layers of the material using various models
     layer1 = structure.Add_Resistive_Screen(thickness=1,flow_resistivity=100000,porosity=.86)
@@ -23,10 +23,10 @@ for i in range(100):
     absorption = structure.absorption(transfer_matrix)
 
     # Calculate the 3rd octave bands absorption coefficients
-    bands = structure.octave_bands(absorption)
+    # bands = structure.octave_bands(absorption)
 
     # Calculate the four frequency average absorption
-    FFA = structure.FFA(bands)
+    # FFA = structure.FFA(bands)
     t = timeit.default_timer() - s
     print(t)
     times.append(t)
