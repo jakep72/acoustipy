@@ -156,8 +156,8 @@ class AcousticID():
             return(gap_freq)
         
         elif self.opt_type == 'Dual':
-            no_gap_freq = self.no_gap_data[:,0]
-            gap_freq = self.gap_data[:,0]
+            no_gap_freq = torch.tensor(self.no_gap_data[:,0]).real
+            gap_freq = torch.tensor(self.gap_data[:,0]).real
         
             if np.array_equal(no_gap_freq,gap_freq) != True:
                 raise ValueError("Frequencies must match between no gap and gap absorption curves")
@@ -170,53 +170,53 @@ class AcousticID():
         #measured absorption coefficients
         if self.input_type == 'absorption':
             if self.opt_type == 'No Gap':
-                no_gap_abs = self.no_gap_data[:,1]
+                no_gap_abs = torch.tensor(self.no_gap_data[:,1])
                 return([no_gap_abs,None])
             
             elif self.opt_type == 'Gap':
-                gap_abs = self.gap_data[:,1]
+                gap_abs = torch.tensor(self.gap_data[:,1])
                 return([None,gap_abs])
             
             elif self.opt_type == 'Dual':
-                no_gap_abs = self.no_gap_data[:,1]
-                gap_abs = self.gap_data[:,1]
+                no_gap_abs = torch.tensor(self.no_gap_data[:,1])
+                gap_abs = torch.tensor(self.gap_data[:,1])
                 return([no_gap_abs,gap_abs])
 
         elif self.input_type == 'reflection':
             if self.opt_type == 'No Gap':
-                no_gap_abs = 1-abs(self.no_gap_data[:,1])**2
+                no_gap_abs = torch.tensor(1-abs(self.no_gap_data[:,1])**2)
                 return([no_gap_abs,None])
             
             elif self.opt_type == 'Gap':
-                gap_abs = 1-abs(self.gap_data[:,1])**2
+                gap_abs = torch.tensor(1-abs(self.gap_data[:,1])**2)
                 return([None,gap_abs])
             
             elif self.opt_type == 'Dual':
-                no_gap_abs = 1-abs(self.no_gap_data[:,1])**2
-                gap_abs = 1-abs(self.gap_data[:,1])**2
+                no_gap_abs = torch.tensor(1-abs(self.no_gap_data[:,1])**2,dtype=torch.float32).real
+                gap_abs = torch.tensor(1-abs(self.gap_data[:,1])**2,dtype=torch.float32).real
                 return([no_gap_abs,gap_abs])
         
         elif self.input_type == 'surface':
             if self.opt_type == 'No Gap':
                 ngzs = self.no_gap_data
                 ngr = (ngzs-self.Z0)/(ngzs+self.Z0)
-                no_gap_abs = 1-abs(ngr[:,1])**2
+                no_gap_abs = torch.tensor(1-abs(ngr[:,1])**2)
                 return([no_gap_abs,None])
             
             elif self.opt_type == 'Gap':
                 gzs = self.gap_data
                 gr = (gzs-self.Z0)/(gzs+self.Z0)
-                gap_abs = 1-abs(gr[:,1])**2
+                gap_abs = torch.tensor(1-abs(gr[:,1])**2)
                 return([None,gap_abs])
             
             elif self.opt_type == 'Dual':
                 ngzs = self.no_gap_data
                 ngr = (ngzs-self.Z0)/(ngzs+self.Z0)
-                no_gap_abs = 1-abs(ngr[:,1])**2
+                no_gap_abs = torch.tensor(1-abs(ngr[:,1])**2)
 
                 gzs = self.gap_data
                 gr = (gzs-self.Z0)/(gzs+self.Z0)
-                gap_abs = 1-abs(gr[:,1])**2
+                gap_abs = torch.tensor(1-abs(gr[:,1])**2)
                 return([no_gap_abs,gap_abs])
 
     @property    
@@ -294,7 +294,8 @@ class AcousticID():
         return(z0)
         
     def _predictionJCA(self,
-                       parameters: dict) -> np.ndarray:
+                       parameters: dict,
+                       optimize: bool) -> np.ndarray:
         """
         Calculates the predicted frequency dependent absorption curve using the parameters identified in the
         optimization procedure defined in the find_values methods
@@ -320,30 +321,38 @@ class AcousticID():
                                    viscosity=self.viscosity_temp,
                                    Pr=self.Pr_temp,
                                    P0=self.P0)
-
-        t = parameters['thickness']
-        fr = parameters['flow resistivity']
-        phi = parameters['porosity']
-        tort = parameters['tortuosity']
-        vcl = parameters['viscous characteristic length']
-        tcl = parameters['thermal characteristic length']
-        air_gap = parameters['air gap']
+        if optimize:
+            t = parameters[0]
+            fr = parameters[1]
+            phi = parameters[2]
+            tort = parameters[3]
+            vcl = parameters[4]
+            tcl = parameters[5]
+            air_gap = parameters[6]
+        else:
+            t = parameters['thickness']
+            fr = parameters['flow resistivity']
+            phi = parameters['porosity']
+            tort = parameters['tortuosity']
+            vcl = parameters['viscous characteristic length']
+            tcl = parameters['thermal characteristic length']
+            air_gap = parameters['air gap']
 
         layer = dummy_struct.Add_JCA_Layer(t,fr,phi,tort,vcl,tcl)
         air = dummy_struct.Add_Air_Layer(thickness = air_gap)
-        dummy_struct.frequency = torch.tensor(self.frequency)
+        dummy_struct.frequency = self.frequency
         
         if self.opt_type == 'Gap' or self.opt_type == 'No Gap':
             s = dummy_struct.assemble_structure(layer,air)
-            predicted = dummy_struct.absorption(s)[:,1].numpy()
+            predicted = dummy_struct.absorption(s)[:,1]
             return(predicted)
         
         elif self.opt_type == 'Dual':
             no_gap_s = dummy_struct.assemble_structure(layer)
             gap_s = dummy_struct.assemble_structure(layer,air)
             
-            no_gap_pred = dummy_struct.absorption(no_gap_s)[:,1].numpy()
-            gap_pred = dummy_struct.absorption(gap_s)[:,1].numpy()
+            no_gap_pred = dummy_struct.absorption(no_gap_s)[:,1]
+            gap_pred = dummy_struct.absorption(gap_s)[:,1]
             
             return([no_gap_pred,gap_pred])
            
@@ -366,30 +375,31 @@ class AcousticID():
             if opt_type is 'Dual', the error for each mounting condition is averaged into a single error metric
         
         """
+        params = torch.tensor(x, requires_grad=True)
+        # t = x[0]
+        # fr = x[1]
+        # phi = x[2]
+        # tort = x[3]
+        # vcl = x[4]
+        # tcl = x[5]
+        # air = x[6]
 
-        t = x[0]
-        fr = x[1]
-        phi = x[2]
-        tort = x[3]
-        vcl = x[4]
-        tcl = x[5]
-        air = x[6]
+        # params = {'thickness':t,'flow resistivity':fr,'porosity':phi,'tortuosity':tort,'viscous characteristic length':vcl,'thermal characteristic length':tcl,'air gap':air}
 
-        params = {'thickness':t,'flow resistivity':fr,'porosity':phi,'tortuosity':tort,'viscous characteristic length':vcl,'thermal characteristic length':tcl,'air gap':air}
-
-        A = self._predictionJCA(params)
+        A = self._predictionJCA(params, optimize=True)
         
         if self.opt_type == 'No Gap':
             err = np.sum(np.abs(np.diff(A-self.meas_abs[0]))**2)
-            return(err)
         
         elif self.opt_type == 'Gap':
             err = np.sum(np.abs(np.diff(A-self.meas_abs[1]))**2)
-            return(err)
         
         elif self.opt_type == 'Dual':
-            err = (np.sum(np.abs(np.diff(A[0]-self.meas_abs[0]))**2)+np.sum(np.abs(np.diff(A[1]-self.meas_abs[1]))**2))/2
-            return(err)
+            err = ((A[0]-self.meas_abs[0])**2).sum()+((A[1]-self.meas_abs[1])**2).sum()
+        
+        err.backward()
+
+        return err.data.cpu().numpy(), params.grad.data.cpu().numpy()
 
     def _bounds(self,
                 tort: float) -> tuple:
@@ -456,7 +466,7 @@ class AcousticID():
                 porosity: float,
                 air_gap: float=0,
                 uncertainty: float=0.01,
-                early_stopping: float=1e-15,
+                early_stopping: float=1e-10,
                 verbose: bool=False) -> dict:
         """
         Optimization routine for identifying the hard-to-measure JCA parameters (tortuosity, viscous, and thermal characteristic lengths).
@@ -512,9 +522,10 @@ class AcousticID():
         init_tort = 2.5
         
         bnds = self._bounds(init_tort)
-        x0 = [self.thickness,self.flow_resistivity,self.porosity,init_tort,(bnds[4][1]-bnds[4][0])/2,(bnds[5][1]-bnds[5][0])/2,self.air_gap] 
+        
+        x0 = torch.tensor([self.thickness,self.flow_resistivity,self.porosity,init_tort,(bnds[4][1]-bnds[4][0])/2,(bnds[5][1]-bnds[5][0])/2,self.air_gap])
         cons = ({'type':'ineq','fun':lambda x:x[5]-x[4]})
-        res = minimize(self._error,x0,method='SLSQP',bounds=bnds,constraints=cons,tol = 1e-50,options={'ftol':1e-50, 'maxiter':1000})
+        res = minimize(self._error,x0,method='SLSQP',bounds=bnds,constraints=cons,jac=True, options={'ftol':1e-50, 'maxiter':5000})
         err = res.fun
         results = np.around(res.x,decimals=3)
 
@@ -544,7 +555,7 @@ class AcousticID():
 
                         grid_search = round((i/loop_len)*100,2)
                         bnds = self._bounds(results[3])
-                        res2 = minimize(self._error,x0,method='SLSQP',bounds=bnds,constraints=cons,tol = 1e-50,options={'ftol':1e-50, 'maxiter':1000})
+                        res2 = minimize(self._error,x0,method='SLSQP',bounds=bnds,constraints=cons,jac=True,tol = 1e-50,options={'ftol':1e-50, 'maxiter':1000})
                         
                         if verbose == True:
                             print(f"{grid_search}% of the parameter space has been searched. The current lowest error is: {err}")
@@ -625,7 +636,7 @@ class AcousticID():
         
         air_gap = self.air_gap/1000
         thickness = self.thickness/1000
-        w = 2*np.pi*self.frequency
+        w = 2*np.pi*self.frequency.numpy()
         k0 = w / self.soundspeed_temp
         
         if self.input_type == 'absorption':
@@ -650,13 +661,13 @@ class AcousticID():
         Zp = np.sqrt((Zs_NG*(Zs_G-Zs_A))+(Zs_G*Zs_A))
         kp = np.arctan(Zp/(1j*Zs_NG))/thickness
         
-        test = np.column_stack((self.frequency,np.real(Zp/(1j*Zs_NG))))
+        test = np.column_stack((self.frequency.numpy(),np.real(Zp/(1j*Zs_NG))))
         
         try:
             cutoff = test[np.where(test[:-1] * test[1:] < 0 )[0]]
             cutoff = np.abs(np.min(cutoff[:,0]))
         except ValueError:
-            cutoff = np.max(self.frequency)
+            cutoff = np.max(self.frequency.numpy())
         
         peff = Zp*kp/w
         keff = w*np.divide(Zp,kp)
@@ -664,11 +675,12 @@ class AcousticID():
         re_peff = np.real(peff)
         im_peff = np.imag(peff)
         
-        fr = np.column_stack((self.frequency**2,-im_peff*w))
+        fr = np.column_stack((self.frequency.numpy()**2,-im_peff*w))
         fr_curve = fr[np.where(fr[:,0] <= cutoff**2)]
         slope1,intercept1,r_value1,p_value1,std_err1 = scipy.stats.linregress(fr_curve[:,0],fr_curve[:,1])
         
         jca_fr = np.abs(intercept1)
+        
         
         #######################################################################################################
         
@@ -676,9 +688,13 @@ class AcousticID():
             tort = (self.porosity/self.density_temp)*(re_peff-np.sqrt((im_peff**2)-((self.flow_resistivity/w)**2)))
         elif return_preds == True:
             tort = (self.porosity/self.density_temp)*(re_peff-np.sqrt((im_peff**2)-((jca_fr/w)**2)))
-        tort1 = np.column_stack((self.frequency,tort))
-        tort_curve = tort1[np.where(tort1[:,0] <= cutoff )]
-        jca_tort = np.abs(np.mean(tort_curve[:,1]))
+        
+        tort1 = np.column_stack((self.frequency.numpy(),tort))
+        
+        tort_curve = tort1[np.where(tort1[:,0] <= cutoff )][:,1]
+        tort_curve_dropped = tort_curve[np.isfinite(tort_curve)]
+        jca_tort = np.abs(np.mean(tort_curve_dropped))
+        
         
         #######################################################################################################
         
@@ -688,7 +704,7 @@ class AcousticID():
         elif return_preds == True:
             phi_denom = re_peff-np.sqrt((im_peff**2)-((jca_fr/w)**2))
         phi = phi_num/phi_denom
-        phi1 = np.column_stack((self.frequency,phi))
+        phi1 = np.column_stack((self.frequency.numpy(),phi))
         phi_curve = phi1[np.where((phi1[:,0] <= cutoff) & (phi1[:,0] >= 500))]
         jca_phi = np.abs(np.mean(phi_curve[:,1]))
 
@@ -698,7 +714,7 @@ class AcousticID():
             vcl = jca_tort*np.sqrt((2*self.density_temp*self.viscosity_temp)/((w*self.porosity*im_peff)*((self.density_temp*jca_tort)-(self.porosity*re_peff))))/(1e-6)
         elif return_preds == True:
             vcl = jca_tort*np.sqrt((2*self.density_temp*self.viscosity_temp)/((w*jca_phi*im_peff)*((self.density_temp*jca_tort)-(jca_phi*re_peff))))/(1e-6)
-        vcl1 = np.column_stack((self.frequency,vcl))
+        vcl1 = np.column_stack((self.frequency.numpy(),vcl))
         vcl_curve = vcl1[np.where(vcl1[:,0] <= cutoff )]
         jca_vcl = np.abs(np.mean(vcl_curve[:,1]))
         
@@ -712,7 +728,7 @@ class AcousticID():
         tcl2 = 1/(-np.imag(tcl1))
         tcl3 = np.sqrt(2*tcl2)       
         tcl4 = tcl0*tcl3/(1e-6)
-        tcl5 = np.column_stack((self.frequency,tcl4))
+        tcl5 = np.column_stack((self.frequency.numpy(),tcl4))
         tcl_curve = tcl5[np.where((tcl5[:,0] <= cutoff) & (tcl5[:,0] >= 500))]
         jca_tcl = np.abs(np.mean(tcl_curve[:,1]))
         
@@ -724,7 +740,7 @@ class AcousticID():
             kn0 = (jca_phi*self.viscosity_temp)/(w*self.density_temp*self.Pr_temp)
         kn1 = 1/np.sqrt(-np.real(tcl1))
         kn3 = kn0*kn1/(1e-10)
-        kn4 = np.column_stack((self.frequency,kn3))
+        kn4 = np.column_stack((self.frequency.numpy(),kn3))
         k0_curve = kn4[np.where((kn4[:,0] <= cutoff) & (kn4[:,0] >= 500))]
         jca_k0 = np.abs(np.mean(k0_curve[:,1]))
         
@@ -757,7 +773,7 @@ class AcousticID():
                flow_resistivity: float=None,
                air_gap: float=0,
                uncertainty: float=0.01,
-               early_stopping: float=1e-15,
+               early_stopping: float=1e-10,
                verbose: bool=False) -> dict:
         """
         The Hybrid routine uses both the inverse and indirect characterization methods to identify the JCA parameters.  The parameters are 
@@ -813,7 +829,7 @@ class AcousticID():
             self.uncertainty = 0.01
         
 
-        indirect_results = self.Indirect(self.thickness,self.porosity,flow_resistivity,self.air_gap)
+        indirect_results = self.Indirect(thickness=self.thickness,porosity=self.porosity, flow_resistivity=flow_resistivity,air_gap=self.air_gap)
         
         if np.isnan(indirect_results['thermal characteristic length']):
             indirect_results['thermal characteristic length'] = indirect_results['viscous characteristic length']
@@ -823,12 +839,12 @@ class AcousticID():
         init_tort = indirect_results['tortuosity']
         
         bnds = self._bounds(init_tort)
-        x0 = [self.thickness,indirect_results['flow resistivity'],indirect_results['porosity'],init_tort,indirect_results['viscous characteristic length'],indirect_results['thermal characteristic length'],self.air_gap] 
+        x0 = torch.tensor([self.thickness,indirect_results['flow resistivity'],indirect_results['porosity'],init_tort,indirect_results['viscous characteristic length'],indirect_results['thermal characteristic length'],self.air_gap])
         cons = ({'type':'ineq','fun':lambda x:x[5]-x[4]})
-        res = minimize(self._error,x0,method='SLSQP',bounds=bnds,constraints=cons,tol = 1e-50,options={'ftol':1e-50, 'maxiter':1000})
+        res = minimize(self._error,x0,method='SLSQP',bounds=bnds,constraints=cons, jac=True, tol = 1e-50,options={'ftol':1e-50, 'maxiter':1000})
         err = res.fun
         results = np.around(res.x,decimals=3)
-
+        
         if err < early_stopping:
             result_dict = {'thickness':results[0],'flow resistivity':results[1],'porosity':results[2],'tortuosity':results[3],'viscous characteristic length':results[4],'thermal characteristic length':results[5],'air gap':results[6],'error':err}  
             if verbose == True:
@@ -907,7 +923,7 @@ class AcousticID():
         """
         if self.opt_type == 'No Gap':
             x = self.meas_abs[0]
-            y = self._predictionJCA(parameters)
+            y = self._predictionJCA(parameters, optimize=False)
             
             slope,intercept,r_value,p_value,std_err = scipy.stats.linregress(x,y)
             stats = {'slope':slope,'intercept':intercept,'r_value':r_value,'p_value':p_value,'std_err':std_err}
@@ -916,7 +932,7 @@ class AcousticID():
         
         elif self.opt_type == 'Gap':
             x = self.meas_abs[1]
-            y = self._predictionJCA(parameters)
+            y = self._predictionJCA(parameters, optimize=False)
             
             slope,intercept,r_value,p_value,std_err = scipy.stats.linregress(x,y)
             stats = {'slope':slope,'intercept':intercept,'r_value':r_value,'p_value':p_value,'std_err':std_err}
@@ -925,12 +941,12 @@ class AcousticID():
         
         elif self.opt_type == 'Dual':
             x1 = self.meas_abs[0]
-            y1 = self._predictionJCA(parameters)[0]
+            y1 = self._predictionJCA(parameters, optimize=False)[0]
             
             slope1,intercept1,r_value1,p_value1,std_err1 = scipy.stats.linregress(x1,y1)
             
             x2 = self.meas_abs[1]
-            y2 = self._predictionJCA(parameters)[1]
+            y2 = self._predictionJCA(parameters, optimize=False)[1]
             
             slope2,intercept2,r_value2,p_value2,std_err2 = scipy.stats.linregress(x2,y2)
             
@@ -961,7 +977,7 @@ class AcousticID():
         
         if self.opt_type == 'No Gap':
             actual = self.meas_abs[0]
-            predicted = self._predictionJCA(parameters)
+            predicted = self._predictionJCA(parameters, optimize=False)
             
             ax.plot(self.frequency,actual,label='Actual')
             ax.plot(self.frequency,predicted,label='Predicted')
@@ -974,7 +990,7 @@ class AcousticID():
         
         elif self.opt_type == 'Gap':
             actual = self.meas_abs[1]
-            predicted = self._predictionJCA(parameters)
+            predicted = self._predictionJCA(parameters, optimize=False)
             
             ax.plot(self.frequency,actual,label='Actual')
             ax.plot(self.frequency,predicted,label='Predicted')
@@ -985,8 +1001,8 @@ class AcousticID():
             plt.show()
         
         elif self.opt_type == 'Dual':
-            no_gap_pred = self._predictionJCA(parameters)[0]
-            gap_pred = self._predictionJCA(parameters)[1]
+            no_gap_pred = self._predictionJCA(parameters, optimize=False)[0]
+            gap_pred = self._predictionJCA(parameters, optimize=False)[1]
             no_gap_actual = self.meas_abs[0]
             gap_actual = self.meas_abs[1]
     
@@ -1025,18 +1041,18 @@ class AcousticID():
 
         if self.opt_type == 'No Gap':
             actual = self.meas_abs[0]
-            predicted = self._predictionJCA(parameters)
+            predicted = self._predictionJCA(parameters, optimize=False)
             all_data = {'frequency':self.frequency,'measured':actual,'predicted':predicted}
 
         
         elif self.opt_type == 'Gap':
             actual = self.meas_abs[1]
-            predicted = self._predictionJCA(parameters)
+            predicted = self._predictionJCA(parameters, optimize=False)
             all_data = {'frequency':self.frequency,'measured':actual,'predicted':predicted}
         
         elif self.opt_type == 'Dual':
-            no_gap_pred = self._predictionJCA(parameters)[0]
-            gap_pred = self._predictionJCA(parameters)[1]
+            no_gap_pred = self._predictionJCA(parameters, optimize=False)[0]
+            gap_pred = self._predictionJCA(parameters, optimize=False)[1]
             no_gap_actual = self.meas_abs[0]
             gap_actual = self.meas_abs[1]
         
