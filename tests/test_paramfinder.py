@@ -106,3 +106,25 @@ def test_hybrid(tmpdir):
     stats = inv.stats(res)
 
     assert stats['r_value'] > .99
+
+def test_ml(tmpdir):
+    no_gap_file = tmpdir.mkdir("sub2")
+
+    structure = AcousticTMM(incidence='Normal',air_temperature = 20)
+
+    layer1 = structure.Add_JCA_Layer(30, 46182,.917,2.1,83,128)
+
+    s1 = structure.assemble_structure(layer1)
+
+    A1 = structure.absorption(s1)
+
+    no_gap = os.path.join(no_gap_file,'no_gap.csv')
+    structure.to_csv(no_gap,A1)
+
+
+    inv = AcousticID(mount_type='No Gap',no_gap_file=no_gap_file.join("no_gap.csv"), air_temperature=20)
+
+    res = inv.ML(thickness=30)
+    stats = inv.stats(res)
+
+    assert stats['r_value'] > .99

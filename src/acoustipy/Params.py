@@ -148,7 +148,7 @@ class AcousticID():
         #frequency range of interest
         
         if self.opt_type == 'No Gap':
-            no_gap_freq = self.no_gap_data[:,0]
+            no_gap_freq = torch.tensor(self.no_gap_data[:,0])
             return(no_gap_freq)
         
         elif self.opt_type == 'Gap':
@@ -395,7 +395,9 @@ class AcousticID():
             err = np.sum(np.abs(np.diff(A-self.meas_abs[1]))**2)
         
         elif self.opt_type == 'Dual':
-            err = ((A[0]-self.meas_abs[0])**2).sum()+((A[1]-self.meas_abs[1])**2).sum()
+            gap_loss = ((torch.sub(A[0],self.meas_abs[0])**2)).sum()
+            no_gap_loss = ((torch.sub(A[1],self.meas_abs[1])**2)).sum()
+            err = torch.mean(gap_loss+no_gap_loss,dtype=torch.double)
         
         err.backward()
 
@@ -871,7 +873,7 @@ class AcousticID():
 
                         grid_search = round((i/loop_len)*100,2)
                         bnds = self._bounds(results[3])
-                        res2 = minimize(self._error,x0,method='SLSQP',bounds=bnds,constraints=cons,tol = 1e-50,options={'ftol':1e-50, 'maxiter':1000})
+                        res2 = minimize(self._error,x0,method='SLSQP',bounds=bnds,constraints=cons,jac=True, tol = 1e-50,options={'ftol':1e-50, 'maxiter':1000})
                         
                         if verbose == True:
                             print(f"{grid_search}% of the parameter space has been searched. The current lowest error is: {err}")
@@ -901,7 +903,96 @@ class AcousticID():
             
             return(result_dict)
         
-        
+    def _criterion(self, y1, y2,params):
+        err = 1e12*torch.sum(torch.diff(y1-y2)**2)
+        if params['vcl'] > params['tcl']:
+            err = 2*err
+        if params['fr'] > 1 or params['fr'] < 0:
+            err = 2*err
+        if params['phi'] > 1 or params['phi'] < 0.001:
+            err = 2*err
+        if params['tau'] > 1 or params['tau'] < 0.2:
+            err = 2*err
+        return(err)
+    
+    def get_params(self, model):
+        params = {}
+        i=0
+        for p in model.parameters():
+            if i == 0:
+                params['fr'] = p.item()
+            if i == 1:
+                params['phi'] = p.item()
+            if i == 2:
+                params['tau'] = p.item()
+            if i == 3:
+                params['vcl'] = p.item()
+            if i == 4:
+                params['tcl'] = p.item()
+            i += 1
+        return params
+    
+    def _gridsearch(self, base_abs, thickness):
+        fr = torch.linspace(10000,1000000,5)
+        phi = torch.linspace(0.05,1,5)
+        tau = torch.linspace(1,5,5)
+        vcl = torch.linspace(10, 500, 5)
+        tcl = torch.linspace(10, 500,5)
+        best_err = 10
+        for f in fr:
+            for p in phi:
+                for t in tau:
+                    for v in vcl:
+                        for tc in tcl:
+                            if tc >= v:
+                                s = AcousticTMM(incidence='Normal',air_temperature=20)
+                                l = s.Add_JCA_Layer(thickness,f,p,t,v,tc)
+                                tm = s.assemble_structure(l)
+                                a = s.absorption(tm)[:,1].float()
+                                err = torch.sum(torch.diff(a-base_abs)**2)
+                                
+                                if err < best_err:
+                                    best_err = err
+                                    best_fr = f/1000000
+                                    best_phi = p
+                                    best_tau = t/5
+                                    best_vcl = v/500
+                                    best_tcl = tc/500
+
+        return(best_fr, best_phi, best_tau, best_vcl, best_tcl)
+    
+    def ML(self, thickness, verbose: bool=True):
+        y=self.meas_abs[0]
+        fr, phi, tau, vcl, tcl1 = self._gridsearch(y, thickness)
+        model = JCAModel(fr, phi, tau, vcl, tcl1, self.frequency)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+        for t in range(100000):
+            y_pred = model.forward(thickness)
+
+            loss = self._criterion(y_pred, y, self.get_params(model))
+           
+            if loss < 2000:
+                for g in optimizer.param_groups:
+                    g['lr'] = 5e-4
+            if loss < 250:
+                for g in optimizer.param_groups:
+                    g['lr'] = 1e-4
+            if loss < 10:
+                for g in optimizer.param_groups:
+                    g['lr'] = 5e-5
+            if loss < 8:
+                break
+
+            if t % 100 == 0 and verbose:
+                print(t, loss.item(), model.string())
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        return model.results()
+
     def stats(self,
               parameters:dict) -> dict:
         """
@@ -1123,3 +1214,43 @@ class AcousticID():
         s.execute(params,'LAYER')
         s.commit()
         s.close()
+
+class JCAModel(AcousticTMM):
+    def __init__(self,
+                 best_fr,
+                 best_phi,
+                 best_tau,
+                 best_vcl,
+                 best_tcl,
+                 freq):
+
+        super().__init__()
+        self.fr = torch.nn.Parameter(best_fr)
+        self.phi = torch.nn.Parameter(best_phi)
+        self.tau = torch.nn.Parameter(best_tau)
+        self.vcl = torch.nn.Parameter(best_vcl)
+        self.tcl = torch.nn.Parameter(best_tcl)
+        self.structure = AcousticTMM(incidence='Normal', air_temperature=20)
+        self.structure.frequency = freq
+        self.thickness = None
+    
+    def forward(self, thickness):
+        self.thickness = thickness
+        layer = self.structure.Add_JCA_Layer(thickness, self.fr*1000000, self.phi, self.tau*5, self.vcl*500, self.tcl*500)
+        tm = self.structure.assemble_structure(layer)
+        a = self.structure.absorption(tm)[:,1].float()
+        return a
+    
+    def string(self):
+        return f'fr = {self.fr.item()*1000000} phi = {self.phi.item()} tau = {self.tau.item()*5} vcl = {self.vcl.item()*500} tcl = {self.tcl.item()*500}'
+    
+    def results(self):
+        result_dict = {'thickness': self.thickness,
+                'flow resistivity': self.fr.item()*1000000,
+                'porosity': self.phi.item(),
+                'tortuosity': self.tau.item()*5,
+                'viscous characteristic length': self.vcl.item()*500,
+                'thermal characteristic length': self.tcl.item()*500,
+                'air gap':0
+        }
+        return result_dict

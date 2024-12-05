@@ -132,7 +132,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 loss_mult = 1.0
 loss_criteria = 1000
 
-
+loss_curve = []
 for t in range(100000):
     # Forward pass: Compute predicted y by passing x to the model
     y_pred = model.forward(25.4)
@@ -157,13 +157,21 @@ for t in range(100000):
     #     print(g['lr'])
     #     print(loss_mult)
     # # print(init_loss)
-    if loss < 10:
+    print(t, loss.item(), model.string())
+    loss_curve.append(loss.item())
+    if loss < 2000:
+        for g in optimizer.param_groups:
+            g['lr'] = 5e-4
+    if loss < 250:
         for g in optimizer.param_groups:
             g['lr'] = 1e-4
-    if loss < 9:
+    if loss < 10:
+        for g in optimizer.param_groups:
+            g['lr'] = 5e-5
+    if loss < 8:
         break
-    if t % 100 == 0:
-        print(t, loss.item(), model.string())
+    # if t % 100 == 0:
+    
         # pred_layer = structure.Add_JCA_Layer(25.4, 105000,model.phi.item(), model.tau.item(), model.vcl.item()/(1e-6), model.tcl.item()/(1e-6))
         # tm = structure.assemble_structure(pred_layer)
         # a = structure.absorption(tm)
@@ -179,7 +187,7 @@ for t in range(100000):
     # clamper(model)
     
 
-        
+    
 e = time.time()
 print(model.string())
 print(e-s)
