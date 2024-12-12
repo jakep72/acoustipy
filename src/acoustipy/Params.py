@@ -910,9 +910,11 @@ class AcousticID():
         if params['fr'] > 1 or params['fr'] < 0:
             err = 2*err
         if params['phi'] > 1 or params['phi'] < 0.001:
-            err = 2*err
+            err = 10*err
         if params['tau'] > 1 or params['tau'] < 0.2:
             err = 2*err
+        if params['vcl'] > 1 or params['tcl'] > 1:
+            err = 10*err
         return(err)
     
     def get_params(self, model):
@@ -933,11 +935,12 @@ class AcousticID():
         return params
     
     def _gridsearch(self, base_abs, thickness):
+        print("Starting grid search...")
         fr = torch.linspace(10000,1000000,5)
-        phi = torch.linspace(0.05,1,5)
-        tau = torch.linspace(1,5,5)
-        vcl = torch.linspace(10, 500, 5)
-        tcl = torch.linspace(10, 500,5)
+        phi = torch.linspace(0.05,.95,10)
+        tau = torch.linspace(1,4.5,5)
+        vcl = torch.linspace(10, 450, 10)
+        tcl = torch.linspace(10, 450,10)
         best_err = 10
         for f in fr:
             for p in phi:
@@ -990,6 +993,7 @@ class AcousticID():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            # self._clamper(model)
 
         return model.results()
 
