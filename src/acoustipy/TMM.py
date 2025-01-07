@@ -14,7 +14,7 @@ class AcousticTMM(torch.nn.Module):
     
     Description:
     ------------
-    AcousticTMM is an implementation of the acoustic transfer matrix method and a number of porous material models built on top of numpy (https://numpy.org/).  
+    AcousticTMM is an implementation of the acoustic transfer matrix method and a number of porous material models built on top of pytorch.  
     It can be used to calculate interesting acoustic characteristics -- like the frequency dependent reflection, absorption, and transmission coefficients of a variety of materials. 
     Using AcousticTMM, a number of layers can be defined and combined to create multilayer structures, which can then be acoustically simulated via the 
     transfer matrix method.
@@ -59,6 +59,9 @@ class AcousticTMM(torch.nn.Module):
     
     P0 (float):
         Atmospheric pressure [Pa]
+
+    device (str):
+        Device to run computations on, either 'cpu' or 'cuda'
 
     """
 
@@ -199,29 +202,31 @@ class AcousticTMM(torch.nn.Module):
 
     
     def _create_layer_TM(self,
-                         Zp: torch.Tensor,
-                         kp: torch.Tensor,
-                         thickness: float) -> torch.Tensor:
+                            Zp: torch.Tensor,
+                            kp: torch.Tensor,
+                            thickness: float) -> torch.Tensor:
         """
-        Creates the transfer matrix for an individual layer in either normal or diffuse sound fields
+        Creates the transfer matrix for an individual layer in either normal or diffuse sound fields.
 
         Parameters
         ----------
-        Zp (ndarray):
-            Characteristic impedance of the layer
-            
-        kp (ndarray):
-            Characteristic wavenumber of the layer
-
-        thickness (float):
-            Layer thickness [m]
+        Zp : torch.Tensor
+            Characteristic impedance of the layer. Shape: (n_frequencies,)
+        kp : torch.Tensor
+            Characteristic wavenumber of the layer. Shape: (n_frequencies,)
+        thickness : float
+            Layer thickness in millimeters.
 
         Returns
         -------
-        TM (ndarray):
-            Normal incidence --> 2 x 2 x len(frequency) numpy array representing the transfer matrix
-            Diffuse field --> 2 x 2 x len(frequency) x len(angles) array representing the transfer matrix
-        
+        TM : torch.Tensor
+            Transfer matrix for the layer.
+            - Normal incidence: Shape: (2, 2, n_frequencies)
+            - Diffuse field: Shape: (2, 2, n_frequencies, n_angles)
+
+        Notes
+        -----
+        This method supports both normal and diffuse sound field incidence types.
         """
         kp = kp.to(self.device)
         Zp = Zp.to(self.device)
@@ -265,19 +270,24 @@ class AcousticTMM(torch.nn.Module):
     def _create_Maa_MPP_TM(self,
                            Zp: torch.Tensor) -> torch.Tensor:
         """
-        Creates the transfer matrix for a Maa microperforated panel layer in either normal or diffuse sound fields
+        Creates the transfer matrix for a Maa microperforated panel layer.
 
         Parameters
         ----------
-        Zp (ndarray):
-            Characteristic impedance of the layer
+        Zp : torch.Tensor
+            Characteristic impedance of the layer.
 
         Returns
         -------
-        TM (ndarray):
-            Normal incidence --> 2 x 2 x len(frequency) numpy array representing the transfer matrix
-            Diffuse field --> 2 x 2 x len(frequency) x len(angles) array representing the transfer matrix
-        
+        TM : torch.Tensor
+            Transfer matrix representing the layer's acoustic properties.
+            Shape depends on incidence type:
+                - Normal incidence: (2, 2, len(frequency))
+                - Diffuse field: (2, 2, len(frequency), len(angles))
+
+        Notes
+        -----
+        This method supports both normal and diffuse sound field incidence types.
         """
         if self.incidence == "Normal":
             TM = torch.zeros((2,2,len(self.frequency)),dtype = torch.complex64)
@@ -305,54 +315,54 @@ class AcousticTMM(torch.nn.Module):
             return(TM)
     
     def _calc_dynamics(self,
-                       flow_resistivity: float,
-                       porosity: float,
-                       tortuosity: float,
-                       viscous_characteristic_length: float,
-                       thermal_characteristic_length: float,
-                       thermal_permeability: float,
-                       thermal_tortuosity: float,
-                       viscous_tortuosity: float,
-                       model: str) -> tuple[torch.Tensor, torch.Tensor]:
+                        flow_resistivity: float,
+                        porosity: float,
+                        tortuosity: float,
+                        viscous_characteristic_length: float,
+                        thermal_characteristic_length: float,
+                        thermal_permeability: float,
+                        thermal_tortuosity: float,
+                        viscous_tortuosity: float,
+                        model: str) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Calculates the dynamic mass density and bulk modulus for porous, equivalent fluid models.
+        Calculates the dynamic mass density and bulk modulus for porous, 
+        equivalent fluid models.
 
         Parameters
         ----------
-        flow_resisitivty (float):
+        flow_resistivity : float
             Static air flow resistivity of the material [Pa*s/m2]
-            
-        porosity (float):
-            open porosity of the material
-
-        tortuosity (float):
-            high frequency limit of the tortuosity of the material
-
-        viscous_characteristic_length (float):
-            viscous characteristic length of the material [m]
-
-        thermal_characteristic_length (float):
-            thermal characteristic length of the material [m]
-
-        thermal_permeability (float):
-            static thermal permeability of the material [m2]
-
-        thermal_tortuosity (float):
-            static thermal tortuosity of the material
-
-        viscous_tortuosity (float):
-            static viscous tortuosity of the material
-
-        model (str):
-            defines the equivalent fluid model to be used
-        
+        porosity : float
+            Open porosity of the material
+        tortuosity : float
+            High frequency limit of the tortuosity of the material
+        viscous_characteristic_length : float
+            Viscous characteristic length of the material [μm]
+        thermal_characteristic_length : float
+            Thermal characteristic length of the material [μm]
+        thermal_permeability : float
+            Static thermal permeability of the material [m2]
+        thermal_tortuosity : float
+            Static thermal tortuosity of the material
+        viscous_tortuosity : float
+            Static viscous tortuosity of the material
+        model : str
+            Defines the equivalent fluid model to be used
 
         Returns
         -------
-        peff, keff (tuple(ndarray, ndarray)):
-            arrays of shape [len(frequency),1] representing the dynamic mass density
-            and bulk modulus of the material
+        peff, keff : tuple[torch.Tensor, torch.Tensor]
+            Arrays of shape [len(frequency),1] representing the dynamic mass 
+            density and bulk modulus of the material
 
+        Notes
+        -----
+        This method supports the following equivalent fluid models:
+            - Delaney-Bazley (DB)
+            - Delaney-Bazley-Miki (DBM)
+            - Johnson-Champoux-Allard (JCA)
+            - Johnson-Champoux-Allard-Lafarge (JCAL)
+            - Johnson-Champoux-Allard-Pride-Lafarge (JCAPL)
         """
         fr = flow_resistivity
         tau = tortuosity
@@ -461,28 +471,29 @@ class AcousticTMM(torch.nn.Module):
         return (peff,keff)
 
     def Add_Air_Layer(self,
-                      thickness: float=400,
-                      save_layer: bool = False,
-                      layer_name: str = None) -> list[torch.Tensor, float, str]:
+                        thickness: float = 400,
+                        save_layer: bool = False,
+                        layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define an air gap layer
+        Defines an air gap layer.
 
         Parameters
         ----------
-        thickness (float):
-            air gap thickness [mm]
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
+        thickness : float, optional
+            Air gap thickness in millimeters (default is 400).
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
+
+        Notes
+        -----
+        The air gap layer is assumed to have a characteristic impedance equal to the impedance of free air.
         """
         if save_layer == True:
             params = [layer_name,'AIR','null',thickness,'null','null','null','null','null','null','null','null','null','null','null','null','null']
@@ -495,33 +506,29 @@ class AcousticTMM(torch.nn.Module):
         return([TM,0,layer_name])
     
     def Add_DB_Layer(self,
-                     thickness: float,
-                     flow_resistivity: float,
-                     save_layer: bool = False,
-                     layer_name: str = None) -> list[torch.Tensor, float, str]:
+                    thickness: float,
+                    flow_resistivity: float,
+                    save_layer: bool = False,
+                    layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a layer using the Delaney-Bazley Model
+        Defines a layer using the Delaney-Bazley Model.
 
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-        
-        flow_resistivity (float):
-            static flow resistivity of the layer [Pa*s/m2]
-        
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
+        thickness : float
+            Layer thickness in millimeters.
+        flow_resistivity : float
+            Static flow resistivity of the layer in Pa*s/m2.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
         Returns
         -------
-        TM, thickness, layer_name (list(ndarray, float, str):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
-        """      
+        """    
         if save_layer == True:
             params = [layer_name,'DB','null',thickness,flow_resistivity,'null','null','null','null','null','null','null','null','null','null','null','null']
             self._layer_to_db(params)
@@ -538,32 +545,28 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
     
     def Add_DBM_Layer(self,
-                      thickness: float,
-                      flow_resistivity: float,
-                      save_layer: bool = False,
-                      layer_name: str = None) -> list[torch.Tensor, float, str]:
+                        thickness: float,
+                        flow_resistivity: float,
+                        save_layer: bool = False,
+                        layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a layer using the Delaney-Bazley-Miki Model
+        Defines a layer using the Delaney-Bazley-Miki Model.
 
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-        
-        flow_resistivity (float):
-            static flow resistivity of the layer [Pa*s/m2]
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
+        thickness : float
+            Layer thickness in millimeters.
+        flow_resistivity : float
+            Static flow resistivity of the layer in Pa*s/m2.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'DBM','null',thickness,flow_resistivity,'null','null','null','null','null','null','null','null','null','null','null','null']
@@ -582,48 +585,40 @@ class AcousticTMM(torch.nn.Module):
        
     
     def Add_JCA_Layer(self,
-                      thickness: float,
-                      flow_resistivity: float,
-                      porosity: float,
-                      tortuosity: float,
-                      viscous_characteristic_length: float,
-                      thermal_characteristic_length: float,
-                      save_layer: bool = False,
-                      layer_name: str = None) -> list[torch.Tensor, float, str]:
+                        thickness: float,
+                        flow_resistivity: float,
+                        porosity: float,
+                        tortuosity: float,
+                        viscous_characteristic_length: float,
+                        thermal_characteristic_length: float,
+                        save_layer: bool = False,
+                        layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a layer using the Johnson-Champoux-Allard Model
+        Defines a layer using the Johnson-Champoux-Allard Model.
 
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-        
-        flow_resisitivty (float):
-            Static air flow resistivity of the material [Pa*s/m2]
-            
-        porosity (float):
-            open porosity of the material
+        thickness : float
+            Layer thickness in millimeters.
+        flow_resistivity : float
+            Static air flow resistivity of the material in Pa*s/m2.
+        porosity : float
+            Open porosity of the material.
+        tortuosity : float
+            High frequency limit of the tortuosity of the material.
+        viscous_characteristic_length : float
+            Viscous characteristic length of the material in micrometers.
+        thermal_characteristic_length : float
+            Thermal characteristic length of the material in micrometers.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
-        tortuosity (float):
-            high frequency limit of the tortuosity of the material
-
-        viscous_characteristic_length (float):
-            viscous characteristic length of the material [µm]
-
-        thermal_characteristic_length (float):
-            thermal characteristic length of the material [µm]
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
-        
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'JCA','null',thickness,flow_resistivity,porosity,tortuosity,viscous_characteristic_length,thermal_characteristic_length,'null','null','null','null','null','null','null','null']
@@ -647,52 +642,43 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
     
     def Add_JCAL_Layer(self,
-                       thickness: float,
-                       flow_resistivity: float,
-                       porosity: float,
-                       tortuosity: float,
-                       viscous_characteristic_length: float,
-                       thermal_characteristic_length: float,
-                       thermal_permeability: float,
-                       save_layer: bool = False,
-                       layer_name: str = None) -> list[torch.Tensor, float, str]:
+                        thickness: float,
+                        flow_resistivity: float,
+                        porosity: float,
+                        tortuosity: float,
+                        viscous_characteristic_length: float,
+                        thermal_characteristic_length: float,
+                        thermal_permeability: float,
+                        save_layer: bool = False,
+                        layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a layer using the Johnson-Champoux-Allard-Lafarge Model
+        Defines a layer using the Johnson-Champoux-Allard-Lafarge Model.
 
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-        
-        flow_resisitivty (float):
-            Static air flow resistivity of the material [Pa*s/m2]
-            
-        porosity (float):
-            open porosity of the material
+        thickness : float
+            Layer thickness in millimeters.
+        flow_resistivity : float
+            Static air flow resistivity of the material in Pa*s/m2.
+        porosity : float
+            Open porosity of the material.
+        tortuosity : float
+            High frequency limit of the tortuosity of the material.
+        viscous_characteristic_length : float
+            Viscous characteristic length of the material in micrometers.
+        thermal_characteristic_length : float
+            Thermal characteristic length of the material in micrometers.
+        thermal_permeability : float
+            Static thermal permeability of the material in square meters.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
-        tortuosity (float):
-            high frequency limit of the tortuosity of the material
-
-        viscous_characteristic_length (float):
-            viscous characteristic length of the material [µm]
-
-        thermal_characteristic_length (float):
-            thermal characteristic length of the material [µm]
-
-        thermal_permeability (float):
-            static thermal permeability of the material [m2]
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
-        
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'JCAL','null',thickness,flow_resistivity,porosity,tortuosity,viscous_characteristic_length,thermal_characteristic_length,thermal_permeability,'null','null','null','null','null','null','null']
@@ -717,60 +703,49 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
     
     def Add_JCAPL_Layer(self,
-                        thickness: float,
-                        flow_resistivity: float,
-                        porosity: float,
-                        tortuosity: float,
-                        viscous_characteristic_length: float,
-                        thermal_characteristic_length: float,
-                        thermal_permeability: float,
-                        thermal_tortuosity: float,
-                        viscous_tortuosity: float,
-                        save_layer: bool = False,
-                        layer_name: str = None) -> list[torch.Tensor, float, str]:
+                            thickness: float,
+                            flow_resistivity: float,
+                            porosity: float,
+                            tortuosity: float,
+                            viscous_characteristic_length: float,
+                            thermal_characteristic_length: float,
+                            thermal_permeability: float,
+                            thermal_tortuosity: float,
+                            viscous_tortuosity: float,
+                            save_layer: bool = False,
+                            layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a layer using the Johnson-Champoux-Allard-Pride-Lafarge Model
+        Defines a layer using the Johnson-Champoux-Allard-Pride-Lafarge Model.
 
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-        
-        flow_resisitivty (float):
-            Static air flow resistivity of the material [Pa*s/m2]
-            
-        porosity (float):
-            open porosity of the material
+        thickness : float
+            Layer thickness in millimeters.
+        flow_resistivity : float
+            Static air flow resistivity of the material in Pa*s/m2.
+        porosity : float
+            Open porosity of the material.
+        tortuosity : float
+            High frequency limit of the tortuosity of the material.
+        viscous_characteristic_length : float
+            Viscous characteristic length of the material in micrometers.
+        thermal_characteristic_length : float
+            Thermal characteristic length of the material in micrometers.
+        thermal_permeability : float
+            Static thermal permeability of the material in square meters.
+        thermal_tortuosity : float
+            Static thermal tortuosity of the material.
+        viscous_tortuosity : float
+            Static viscous tortuosity of the material.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
-        tortuosity (float):
-            high frequency limit of the tortuosity of the material
-
-        viscous_characteristic_length (float):
-            viscous characteristic length of the material [µm]
-
-        thermal_characteristic_length (float):
-            thermal characteristic length of the material [µm]
-
-        thermal_permeability (float):
-            static thermal permeability of the material [m2]
-
-        thermal_tortuosity (float):
-            static thermal tortuosity of the material
-
-        viscous_tortuosity (float):
-            static viscous tortuosity of the material
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
-        
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'JCAPL','null',thickness,flow_resistivity,porosity,tortuosity,viscous_characteristic_length,thermal_characteristic_length,thermal_permeability,thermal_tortuosity,viscous_tortuosity,'null','null','null','null','null']
@@ -797,40 +772,34 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
     
     def Add_Horoshenkov_Layer(self,
-                              thickness: float,
-                              porosity: float,
-                              median_pore_size: float,
-                              pore_size_distribution: float,
-                              save_layer: bool = False,
-                              layer_name: str = None) -> list[torch.Tensor, float, str]:
+                                thickness: float,
+                                porosity: float,
+                                median_pore_size: float,
+                                pore_size_distribution: float,
+                                save_layer: bool = False,
+                                layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a layer using the Horoshenkov et al Model
-        
+        Defines a layer using the Horoshenkov et al Model.
+
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-            
-        porosity (float):
-            open porosity of the material
+        thickness : float
+            Layer thickness in millimeters.
+        porosity : float
+            Open porosity of the material.
+        median_pore_size : float
+            Median pore size of the material in micrometers.
+        pore_size_distribution : float
+            Standard deviation in the pore size distribution.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
-        median_pore_size (float):
-            median pore size of the material [µm]
-        
-        pore_size_distribution (float):
-            standard deviation in the pore size distribution
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
-        
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'horoshenkov','null',thickness,'null',porosity,'null','null','null','null','null','null','null','null','null',median_pore_size,pore_size_distribution]
@@ -861,74 +830,60 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
     
     def Add_Biot_Limp_Layer(self,
-                            EF_model: str,
-                            thickness: float,
-                            flow_resistivity: float,
-                            mass_density: float,
-                            porosity: float,
-                            tortuosity: float=0,
-                            viscous_characteristic_length: float=0,
-                            thermal_characteristic_length: float=0,
-                            thermal_permeability: float=0,
-                            thermal_tortuosity: float=0,
-                            viscous_tortuosity: float=0,
-                            save_layer: bool = False,
-                            layer_name: str = None) -> list[torch.Tensor, float, str]:
-                 
+                                EF_model: str,
+                                thickness: float,
+                                flow_resistivity: float,
+                                mass_density: float,
+                                porosity: float,
+                                tortuosity: float = 0,
+                                viscous_characteristic_length: float = 0,
+                                thermal_characteristic_length: float = 0,
+                                thermal_permeability: float = 0,
+                                thermal_tortuosity: float = 0,
+                                viscous_tortuosity: float = 0,
+                                save_layer: bool = False,
+                                layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a limp Biot layer, using any of the equivalent fluid models
-        
+        Defines a limp Biot layer using any of the equivalent fluid models.
+
         Parameters
         ----------
-        EF_model (str):
-            Equivalent fluid model to be used:
-            DB --> Delaney-Bazley
-            DBM --> Delaney-Bazley-Miki
-            JCA --> Johnson-Champoux-Allard
-            JCAL --> Johnson-Champoux-Allar-Lafarge
-            JCAPL --> Johnson-Champoux-Allard-Pride-Lafarge
+        EF_model : str
+            Equivalent fluid model to be used. Options are:
+                'DB' : Delaney-Bazley
+                'DBM' : Delaney-Bazley-Miki
+                'JCA' : Johnson-Champoux-Allard
+                'JCAL' : Johnson-Champoux-Allard-Lafarge
+                'JCAPL' : Johnson-Champoux-Allard-Pride-Lafarge
+        thickness : float
+            Layer thickness in millimeters.
+        flow_resistivity : float
+            Static air flow resistivity of the material in Pa*s/m2.
+        mass_density : float
+            Bulk density of the material in kg/m3.
+        porosity : float
+            Open porosity of the material.
+        tortuosity : float, optional
+            High frequency limit of the tortuosity of the material (default is 0).
+        viscous_characteristic_length : float, optional
+            Viscous characteristic length of the material in micrometers (default is 0).
+        thermal_characteristic_length : float, optional
+            Thermal characteristic length of the material in micrometers (default is 0).
+        thermal_permeability : float, optional
+            Static thermal permeability of the material in square meters (default is 0).
+        thermal_tortuosity : float, optional
+            Static thermal tortuosity of the material (default is 0).
+        viscous_tortuosity : float, optional
+            Static viscous tortuosity of the material (default is 0).
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
-        thickness (float):
-            layer thickness [mm]
-        
-        flow_resisitivty (float):
-            Static air flow resistivity of the material [Pa*s/m2]
-            
-        porosity (float):
-            open porosity of the material
-
-        mass_density (float):
-            bulk density of the material [kg/m3]
-
-        tortuosity (float):, optional
-            high frequency limit of the tortuosity of the material. Needed for JCA, JCAL, and JCAPL models.
-
-        viscous_characteristic_length (float):, optional
-            viscous characteristic length of the material [µm]. Needed for JCA, JCAL, and JCAPL models.
-
-        thermal_characteristic_length (float):, optional
-            thermal characteristic length of the material [µm]. Needed for JCA, JCAL and JCAPL models.
-
-        thermal_permeability (float):, optional
-            static thermal permeability of the material [m2]. Needed for JCAL and JCAPL models.
-
-        thermal_tortuosity (float):, optional
-            static thermal tortuosity of the material. Needed for JCAPL models.
-
-        viscous_tortuosity (float):, optional
-            static viscous tortuosity of the material. Needed for JCAPL models.
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
-        
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'biot_limp',EF_model,thickness,flow_resistivity,porosity,tortuosity,viscous_characteristic_length,thermal_characteristic_length,thermal_permeability,thermal_tortuosity,viscous_tortuosity,mass_density,'null','null','null','null']
@@ -977,74 +932,60 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
     
     def Add_Biot_Rigid_Layer(self,
-                             EF_model: str,
-                             thickness: float,
-                             flow_resistivity: float,
-                             mass_density: float,
-                             porosity: float,
-                             tortuosity: float=0,
-                             viscous_characteristic_length: float=0,
-                             thermal_characteristic_length: float=0,
-                             thermal_permeability: float=0,
-                             thermal_tortuosity: float=0,
-                             viscous_tortuosity: float=0,
-                             save_layer: bool = False,
-                             layer_name: str = None) -> list[torch.Tensor, float, str]:
-                
+                                EF_model: str,
+                                thickness: float,
+                                flow_resistivity: float,
+                                mass_density: float,
+                                porosity: float,
+                                tortuosity: float = 0,
+                                viscous_characteristic_length: float = 0,
+                                thermal_characteristic_length: float = 0,
+                                thermal_permeability: float = 0,
+                                thermal_tortuosity: float = 0,
+                                viscous_tortuosity: float = 0,
+                                save_layer: bool = False,
+                                layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a rigid Biot layer, using any of the equivalent fluid models
+        Defines a rigid Biot layer using any of the equivalent fluid models.
 
         Parameters
         ----------
-        EF_model (str):
-            Equivalent fluid model to be used:
-            DB --> Delaney-Bazley
-            DBM --> Delaney-Bazley-Miki
-            JCA --> Johnson-Champoux-Allard
-            JCAL --> Johnson-Champoux-Allar-Lafarge
-            JCAPL --> Johnson-Champoux-Allard-Pride-Lafarge
+        EF_model : str
+            Equivalent fluid model to be used. Options are:
+                'DB' : Delaney-Bazley
+                'DBM' : Delaney-Bazley-Miki
+                'JCA' : Johnson-Champoux-Allard
+                'JCAL' : Johnson-Champoux-Allard-Lafarge
+                'JCAPL' : Johnson-Champoux-Allard-Pride-Lafarge
+        thickness : float
+            Layer thickness in millimeters.
+        flow_resistivity : float
+            Static air flow resistivity of the material in Pa*s/m2.
+        mass_density : float
+            Bulk density of the material in kg/m3.
+        porosity : float
+            Open porosity of the material.
+        tortuosity : float, optional
+            High frequency limit of the tortuosity of the material (default is 0).
+        viscous_characteristic_length : float, optional
+            Viscous characteristic length of the material in micrometers (default is 0).
+        thermal_characteristic_length : float, optional
+            Thermal characteristic length of the material in micrometers (default is 0).
+        thermal_permeability : float, optional
+            Static thermal permeability of the material in square meters (default is 0).
+        thermal_tortuosity : float, optional
+            Static thermal tortuosity of the material (default is 0).
+        viscous_tortuosity : float, optional
+            Static viscous tortuosity of the material (default is 0).
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
-        thickness (float):
-            layer thickness [mm]
-        
-        flow_resisitivty (float):
-            Static air flow resistivity of the material [Pa*s/m2]
-            
-        porosity (float):
-            open porosity of the material
-
-        mass_density (float):
-            bulk density of the material [kg/m3]
-
-        tortuosity (float):, optional
-            high frequency limit of the tortuosity of the material. Needed for JCA, JCAL, and JCAPL models.
-
-        viscous_characteristic_length (float):, optional
-            viscous characteristic length of the material [µm]. Needed for JCA, JCAL, and JCAPL models.
-
-        thermal_characteristic_length (float):, optional
-            thermal characteristic length of the material [µm]. Needed for JCA, JCAL and JCAPL models.
-
-        thermal_permeability (float):, optional
-            static thermal permeability of the material [m2]. Needed for JCAL and JCAPL models.
-
-        thermal_tortuosity (float):, optional
-            static thermal tortuosity of the material. Needed for JCAPL models.
-
-        viscous_tortuosity (float):, optional
-            static viscous tortuosity of the material. Needed for JCAPL models.
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
-        
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'biot_rigid',EF_model,thickness,flow_resistivity,porosity,tortuosity,viscous_characteristic_length,thermal_characteristic_length,thermal_permeability,thermal_tortuosity,viscous_tortuosity,mass_density,'null','null','null','null']
@@ -1096,39 +1037,31 @@ class AcousticTMM(torch.nn.Module):
 
     
     def Add_Resistive_Screen(self,
-                             thickness: float,
-                             flow_resistivity: float,
-                             porosity: float,
-                             save_layer: bool = False,
-                             layer_name: str = None) -> list[torch.Tensor, float, str]:
-        
-
-        
+                                thickness: float,
+                                flow_resistivity: float,
+                                porosity: float,
+                                save_layer: bool = False,
+                                layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a resistive screen layer
+        Defines a resistive screen layer.
 
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-        
-        flow_resisitivty (float):
-            Static air flow resistivity of the material [Pa*s/m2]
-            
-        porosity (float):
-            open porosity of the material
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
+        thickness : float
+            Layer thickness in millimeters.
+        flow_resistivity : float
+            Static air flow resistivity of the material in Pa*s/m2.
+        porosity : float
+            Open porosity of the material.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'screen','null',thickness,flow_resistivity,porosity,'null','null','null','null','null','null','null','null','null','null','null']
@@ -1152,37 +1085,31 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
     
     def Add_MAA_MPP_Layer(self,
-                          thickness: float,
-                          pore_diameter: float,
-                          c_to_c_dist: float,
-                          save_layer: bool = False,
-                          layer_name: str = None) -> list[torch.Tensor, float, str]:
-        
+                            thickness: float,
+                            pore_diameter: float,
+                            c_to_c_dist: float,
+                            save_layer: bool = False,
+                            layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a microperforated layer using Maa's model
+        Defines a microperforated layer using Maa's model.
 
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-        
-        pore_diameter (float):
-            diameter of the microperforate [mm]
-            
-        c_to_c_dist (float):
-            center to center distance of the microperforates [mm]
-
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
+        thickness : float
+            Layer thickness in millimeters.
+        pore_diameter : float
+            Diameter of the microperforate in millimeters.
+        c_to_c_dist : float
+            Center to center distance of the microperforates in millimeters.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'MAA_MPP','null',thickness,'null','null','null','null','null','null','null','null','null',pore_diameter,c_to_c_dist,'null','null']
@@ -1211,36 +1138,31 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
     
     def Add_MPP_EF_Layer(self,
-                         thickness: float,
-                         pore_diameter: float,
-                         c_to_c_dist: float,
-                         save_layer: bool = False,
-                         layer_name: str = None) -> list[torch.Tensor, float, str]:
+                            thickness: float,
+                            pore_diameter: float,
+                            c_to_c_dist: float,
+                            save_layer: bool = False,
+                            layer_name: str = None) -> list[torch.Tensor, float, str]:
         """
-        Define a microperforated layer using an equivalent fluid model
+        Defines a microperforated layer using an equivalent fluid model.
 
         Parameters
         ----------
-        thickness (float):
-            layer thickness [mm]
-        
-        pore_diameter (float):
-            diameter of the microperforate [mm]
-            
-        c_to_c_dist (float):
-            center to center distance of the microperforates [mm]
-        
-        save_layer (bool):
-            Specify whether to save the input parameters to a database for later use.
-
-        layer_name (str):
-            If save_layer is set to True, specify the name of the layer.  Must be a unique identifier.
+        thickness : float
+            Layer thickness in millimeters.
+        pore_diameter : float
+            Diameter of the microperforate in millimeters.
+        c_to_c_dist : float
+            Center to center distance of the microperforates in millimeters.
+        save_layer : bool, optional
+            Specifies whether to save the input parameters to a database for later use (default is False).
+        layer_name : str, optional
+            If save_layer is True, specifies the name of the layer (must be a unique identifier, default is None).
 
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         if save_layer == True:
             params = [layer_name,'EF_MPP','null',thickness,'null','null','null','null','null','null','null','null','null',pore_diameter,c_to_c_dist,'null','null']
@@ -1272,44 +1194,33 @@ class AcousticTMM(torch.nn.Module):
         return([TM,thickness,layer_name])
 
     def Add_Layer_From_Tube(self,
-                            no_gap_file: str,
-                            gap_file: str,
-                            sample_thickness: float,
-                            air_gap_thickness: float,
-                            measurement: str = 'reflection') -> list[torch.Tensor, float, str]:
-        
-
-        
+                                no_gap_file: str,
+                                gap_file: str,
+                                sample_thickness: float,
+                                air_gap_thickness: float,
+                                measurement: str = 'reflection') -> list[torch.Tensor, float, str]:
         """
-        Define a layer from the normal incidence reflection coefficients or the surface impedance of a material obtained from
-        an impedance tube.  Utsuno's method currently implemented.
+        Defines a layer from the normal incidence reflection coefficients or the surface impedance of a material obtained from an impedance tube.
 
         Parameters
         ----------
-        no_gap_file (str):
+        no_gap_file : str
             Name of the csv filepath that contains the frequency dependent absorption, reflection, or surface impedance coefficients of a single porous layer obtained 
-            from an impedence tube measurement with rigid backing.  The csv file should contain 2 columns of equal length -- the frequencies in the 1st column and 
-            coefficients in the 2nd.
-            
-        gap_file (str):
+            from an impedance tube measurement with rigid backing.
+        gap_file : str
             Name of the csv filepath that contains the frequency dependent absorption, reflection, or surface impedance coefficients of a single porous layer obtained 
-            from an impedence tube measurement with an air gap backing.  The csv file should contain 2 columns of equal length -- the frequencies in the 1st column and 
-            coefficients in the 2nd.
-            
-        sample_thickness (float):
-            thickness of the sample [mm]
-
-        air_gap_thickness (float):
-            thickness of the air gap [mm] in the gap mounting condition.
-
-        measurement (str):
-            'reflection' or 'surface' measurement types used in the No_Gap and Gap parameters.
+            from an impedance tube measurement with an air gap backing.
+        sample_thickness : float
+            Thickness of the sample in millimeters.
+        air_gap_thickness : float
+            Thickness of the air gap in millimeters in the gap mounting condition.
+        measurement : str, optional
+            'reflection' or 'surface' measurement types used in the No_Gap and Gap parameters (default is 'reflection').
 
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        
         """
         thickness = sample_thickness/1000
         air_thickness = air_gap_thickness/1000
@@ -1345,22 +1256,20 @@ class AcousticTMM(torch.nn.Module):
         
         return([TM,thickness,None]) 
         
-    def Add_Layer_From_Database(self,
-                                layer_name: str) -> list[torch.Tensor, float, str]:
-
-        '''
-        Define a layer from properties that have been saved to a database.
+    def Add_Layer_From_Database(self, layer_name: str) -> list[torch.Tensor, float, str]:
+        """
+        Defines a layer from properties that have been saved to a database.
 
         Parameters
         ----------
-        layer_name (str):
+        layer_name : str
             The unique name the layer was saved to the database as.
 
         Returns
         -------
-        TM, thickness, layer_name (list[ndarray, float, str]):
+        TM, thickness, layer_name : list[torch.Tensor, float, str]
             The transfer matrix, thickness, and name of the layer.
-        '''
+        """
         
         s = AcoustiBase()
         
@@ -1419,21 +1328,20 @@ class AcousticTMM(torch.nn.Module):
             layer = self.Add_Air_Layer(data[0][4])
             return(layer)
 
-    def assemble_from_database(self,
-                               name: str) -> list[torch.Tensor, float]:
-        '''
-        Define a multilayer structure that has been saved to a database.
+    def assemble_from_database(self, name: str) -> list[torch.Tensor, float]:
+        """
+        Defines a multilayer structure that has been saved to a database.
 
         Parameters
         ----------
-        name (str):
+        name : str
             The unique name the multilayer structure was saved to the database as.
 
         Returns
         -------
-        Tt,thickness (list[ndarray, float]):
+        Tt, thickness : list[torch.Tensor, float]
             The total transfer matrix and total thickness of the structure.
-        '''
+        """
         s = AcoustiBase()
         
         data = s.query("SELECT * from STRUCTURE WHERE structure_name = ?", (name,))[0]
@@ -1450,33 +1358,28 @@ class AcousticTMM(torch.nn.Module):
         return(structure)
 
     def assemble_structure(self,
-                           *kwargs,
-                           save_structure: bool=False,
-                           structure_name: str=None,
-                           db_flag: bool=False) -> list[torch.Tensor, float]:
+                            *kwargs,
+                            save_structure: bool = False,
+                            structure_name: str = None,
+                            db_flag: bool = False) -> list[torch.Tensor, float]:
         """
-        Calculates the total transfer matrix for a structure of 'n' number of layers.  The structure is defined from left to right --> left being the face
-        of the structure where sound impinges on the surface and right being the back or bottom of the structure that sound propagates through.
+        Calculates the total transfer matrix for a structure of 'n' number of layers.
 
         Parameters
         ----------
-        *kwargs (list):
-            individual transfer matrices, thicknesses, and names of each layer, which is returned by any of the "Add_XXX_Layer" methods.
-
-        save_structure (bool):
-            Specify whether to save the structure to a database for later use.
-
-        structure_name (str):
-            If save_structure is set to True, specify the name of the structure.  Must be a unique identifier.
-
-        db_flag (bool):
-            DO NOT CHANGE THIS PARAMETER -- for internal calclations only.
+        *kwargs : list
+            Individual transfer matrices, thicknesses, and names of each layer.
+        save_structure : bool, optional
+            Specifies whether to save the structure to a database for later use (default is False).
+        structure_name : str, optional
+            If save_structure is True, specifies the name of the structure (must be a unique identifier, default is None).
+        db_flag : bool, optional
+            For internal calculations only (default is False).
 
         Returns
         -------
-        Tt,thickness list([ndarray, float]):
+        Tt, thickness : list[torch.Tensor, float]
             The total transfer matrix and total thickness of the structure.
-        
         """
 
         transfer_matrices = []
@@ -1545,21 +1448,19 @@ class AcousticTMM(torch.nn.Module):
             elif len(transfer_matrices) == 0:
                 raise ValueError("Error: Structure Not Defined. Specify each layer in assemble_structure.")
 
-    def reflection(self,
-                   transfer_matrix: list) -> torch.Tensor:
+    def reflection(self, transfer_matrix: list) -> torch.Tensor:
         """
         Calculates the frequency dependent reflection coefficients of the structure.
 
         Parameters
         ----------
-        transfer_matrix (list):
-            total transfer matrix and thickness of the structure, which is returned by the "assemble_structure" method.
+        transfer_matrix : list
+            Total transfer matrix and thickness of the structure, which is returned by the "assemble_structure" method.
 
         Returns
         -------
-        curve (ndarray):
-            The 2D array of frequencies and reflection coefficients
-        
+        curve : torch.Tensor
+            The 2D array of frequencies and reflection coefficients.
         """
         Tt = transfer_matrix[0]
         
@@ -1589,21 +1490,19 @@ class AcousticTMM(torch.nn.Module):
             curve = torch.column_stack((self.frequency,R))
             return (curve)
     
-    def absorption(self,
-                   transfer_matrix: list) -> torch.Tensor:
+    def absorption(self, transfer_matrix: list) -> torch.Tensor:
         """
         Calculates the frequency dependent absorption coefficients of the structure.
 
         Parameters
         ----------
-        transfer_matrix (list):
-            total transfer matrix and thickness of the structure, which is returned by the "assemble_structure" method.
+        transfer_matrix : list
+            Total transfer matrix and thickness of the structure, which is returned by the "assemble_structure" method.
 
         Returns
         -------
-        curve (ndarray):
-            The 2D array of frequencies and absorption coefficients
-        
+        curve : torch.Tensor
+            The 2D array of frequencies and absorption coefficients.
         """
         Tt = transfer_matrix[0]
         
@@ -1639,21 +1538,19 @@ class AcousticTMM(torch.nn.Module):
             
             return (curve)
         
-    def transmission_loss(self,
-                          transfer_matrix: list) -> torch.Tensor:
+    def transmission_loss(self, transfer_matrix: list) -> torch.Tensor:
         """
         Calculates the frequency dependent transmission coefficients of the structure.
 
         Parameters
         ----------
-        transfer_matrix (list):
-            total transfer matrix and thickness of the structure, which is returned by the "assemble_structure" method.
+        transfer_matrix : list
+            Total transfer matrix and thickness of the structure, which is returned by the "assemble_structure" method.
 
         Returns
         -------
-        curve (ndarray):
-            The 2D array of frequencies and transmission coefficients
-        
+        curve : torch.Tensor
+            The 2D array of frequencies and transmission loss coefficients.
         """
         Tt = transfer_matrix[0]
         thickness = transfer_matrix[1]
@@ -1692,25 +1589,21 @@ class AcousticTMM(torch.nn.Module):
             
             return (curve)
     
-    def octave_bands(self,
-                     curve: torch.Tensor,
-                     kind: str='THIRD_OCTAVE') -> torch.Tensor:
+    def octave_bands(self, curve: torch.Tensor, kind: str = 'THIRD_OCTAVE') -> torch.Tensor:
         """
-        Calculates the third octave or octave band absorption or transmission spectrums
+        Calculates the third octave or octave band absorption or transmission spectrums.
 
         Parameters
         ----------
-        curve (ndarray):
-            The 2D array of frequencies and absorption or transmission coefficients, which is returend by the 'absorption' or 'transmission_loss' methods.
-        
-        kind (str):
-            'OCTAVE' or 'THIRD_OCTAVE'
-        
+        curve : torch.Tensor
+            The 2D array of frequencies and absorption or transmission coefficients.
+        kind : str, optional
+            The type of octave band to calculate. Can be 'OCTAVE' or 'THIRD_OCTAVE' (default is 'THIRD_OCTAVE').
+
         Returns
         -------
-        octaves (ndarray):
-            The 2D array of octave bands and absorption or transmission coefficients
-        
+        octaves : torch.Tensor
+            The 2D array of octave bands and absorption or transmission coefficients.
         """
         if kind == 'OCTAVE':
             
@@ -1800,21 +1693,19 @@ class AcousticTMM(torch.nn.Module):
             
             return(octaves)
         
-    def SAA(self,
-            third_octave_curve: torch.Tensor) -> float:
+    def SAA(self, third_octave_curve: torch.Tensor) -> float:
         """
-        Calculates the average sound absorption coefficient between the 200Hz and 2500Hz third octave frequency bands.  
+        Calculates the average sound absorption coefficient between the 200Hz and 2500Hz third octave frequency bands.
 
         Parameters
         ----------
-        third_octave_curve (ndarray):
-            The 2D array of frequencies and absorption, which is returend by the 'octave_bands' method.
-        
+        third_octave_curve : torch.Tensor
+            The 2D array of frequencies and absorption, which is returned by the 'octave_bands' method.
+
         Returns
         -------
-        saa (float):
-            The average sound absorption coefficient, rounded to 3 decimal places
-        
+        saa : float
+            The average sound absorption coefficient, rounded to 3 decimal places.
         """
         try:
             l = int(torch.where((third_octave_curve[:,0] == 200))[0].item())
@@ -1828,21 +1719,19 @@ class AcousticTMM(torch.nn.Module):
         
         return(saa)
     
-    def FFA(self,
-            third_octave_curve: torch.Tensor) -> float:
+    def FFA(self, third_octave_curve: torch.Tensor) -> float:
         """
-        Calculates the four frequency average sound absorption coefficient at the 250Hz, 500Hz, 1000Hz, and 2000Hz third octave frequency bands.  
+        Calculates the four frequency average sound absorption coefficient at the 250Hz, 500Hz, 1000Hz, and 2000Hz third octave frequency bands.
 
         Parameters
         ----------
-        third_octave_curve (ndarray):
+        third_octave_curve : torch.Tensor
             The 2D array of frequencies and absorption, which is returned by the 'octave_bands' method.
-        
+
         Returns
         -------
-        ffa (float):
-            The four frequency average sound absorption coefficient, rounded to 3 decimal places
-        
+        ffa : float
+            The four frequency average sound absorption coefficient, rounded to 3 decimal places.
         """
         absfreq = []
         for i in (250,500,1000,2000):
@@ -1857,25 +1746,22 @@ class AcousticTMM(torch.nn.Module):
         
         return(ffa)
         
-    def plot_curve(self,
-                   curves: list,
-                   labels: list = None,
-                   kind: str ='LINEAR') -> None:
+    def plot_curve(self, curves: list, labels: list = None, kind: str = 'LINEAR') -> None:
         """
         Plots the frequency dependent reflection, absorption, or transmission coefficients of 1 or more structures.
 
         Parameters
         ----------
-        curves (list):
-            List of 2D arrays of frequencies and reflection, absorption, or transmission coefficients, which is retured by the 'reflection',
-            'absorption', or 'transmission_loss' methods.
+        curves : list
+            List of 2D arrays of frequencies and reflection, absorption, or transmission coefficients.
+        labels : list, optional
+            List of strings to create a legend on the plot with labels (default is None).
+        kind : str, optional
+            Type of plot to create. Can be 'LINEAR' or 'LOG' (default is 'LINEAR').
 
-        labels (list):, optional
-            List of strings to create a legend on the plot with labels
-
-        kind (str):
-            'LINEAR' or 'LOG' --> define whether the frequencies should be converted to a log scale for plotting purposes.
-        
+        Returns
+        -------
+        None
         """
         f, ax = plt.subplots(1)
         
@@ -1912,22 +1798,20 @@ class AcousticTMM(torch.nn.Module):
 
         return
 
-    def to_csv(self,
-               filename: str,
-               data: torch.Tensor) -> None:
+    def to_csv(self, filename: str, data: torch.Tensor) -> None:
         """
         Saves the frequency dependent reflection, absorption, or transmission coefficients of a structure to a csv file without headers.
 
         Parameters
         ----------
-            
-        filename (str):
-            Name of the csv file to save data to
+        filename : str
+            Name of the csv file to save data to.
+        data : torch.Tensor
+            2D array of frequencies and reflection, absorption, or transmission coefficients.
 
-        data (ndarray):
-            2D array of frequencies and reflection, absorption, or transmission coefficients, which is retured by the 'reflection',
-            'absorption', or 'transmission_loss' methods
-        
+        Returns
+        -------
+        None
         """
         if ".csv" in filename:
             file = filename
@@ -1937,20 +1821,21 @@ class AcousticTMM(torch.nn.Module):
         save_path = os.path.join(file)
         np.savetxt(save_path, data, delimiter=",")
 
-    def load_to_array(self,
-                      filename: str,
-                      type: str ='complex') -> None:
+    def load_to_array(self, filename: str, type: str = 'complex') -> torch.Tensor:
         """
         Loads data from csv or excel file.
 
         Parameters
         ----------
-        filename (str):
-            Name of the file to load data from
+        filename : str
+            Name of the file to load data from.
+        type : str, optional
+            Type of data being loaded. Can be 'complex' or 'float' (default is 'complex').
 
-        type (str):
-            type of data being loaded -- either complex or floating point data
-        
+        Returns
+        -------
+        data : torch.Tensor
+            Loaded data.
         """
         if type == 'complex':
             try:
@@ -1966,21 +1851,19 @@ class AcousticTMM(torch.nn.Module):
         
         return (data)
     
-    def _layer_to_db(self,
-                    params: list) -> None:
-            '''
-            Add a layer to the database
-            
-            Parameters
-            ----------
-            params (list):
-                Attributes of the given layer
+    def _layer_to_db(self, params: list) -> None:
+        """
+        Adds a layer to the database.
 
-            '''
-            s = AcoustiBase()
-            data = s.pull('LAYER')
-            id1 = len(data)+1
-            params.insert(0,id1)
-            s.execute(params,'LAYER')
-            s.commit()
-            s.close()
+        Parameters
+        ----------
+        params : list
+            Attributes of the given layer.
+        """
+        s = AcoustiBase()
+        data = s.pull('LAYER')
+        id1 = len(data)+1
+        params.insert(0,id1)
+        s.execute(params,'LAYER')
+        s.commit()
+        s.close()

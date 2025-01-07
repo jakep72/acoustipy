@@ -8,8 +8,8 @@ s = time.time()
 structure = AcousticTMM(incidence='Normal',air_temperature = 20)
 
 # Define the JCA and air gap material parameters for the toy data
-layer1 = structure.Add_JCA_Layer(thickness = 30, flow_resistivity = 105000, porosity = .85, tortuosity = 4.5, viscous_characteristic_length = 45, thermal_characteristic_length = 65)
-air = structure.Add_Air_Layer(thickness = 375)
+layer1 = structure.Add_JCA_Layer(thickness = 30, flow_resistivity = 145218, porosity = .85, tortuosity = 4.5, viscous_characteristic_length = 45, thermal_characteristic_length = 65)
+air = structure.Add_Air_Layer(thickness = 1)
 
 # Generate rigid backed absorption data and save to a csv file
 s1 = structure.assemble_structure(layer1)

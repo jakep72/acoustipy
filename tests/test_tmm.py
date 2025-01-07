@@ -1,6 +1,8 @@
 from acoustipy import AcousticTMM
 import matplotlib.pyplot as plt 
+import torch
 import pytest
+
 
 def lengths(normal_layer, diffuse_layer):
     normal_array = normal_layer[0].shape
@@ -182,10 +184,6 @@ def test_ef_mpp_layer():
                                         pore_diameter=0.5,
                                         c_to_c_dist=1)
     assert lengths(normal_layer, diffuse_layer) == ((2,2,800), (2,2,800,79))
-
-# def test_layer_to_database():
-#     structure = AcousticTMM(incidence='Normal', fmin=4, fmax=3200, fs=4, air_temperature=20)
-#     structure.Add_DB_Layer(25.4, 50000,save_layer=True,layer_name='test_DB')
 
 def test_air_props():
     structure = AcousticTMM(air_temperature=25)

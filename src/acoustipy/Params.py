@@ -917,7 +917,7 @@ class AcousticID():
             err = 10*err
         return(err)
     
-    def get_params(self, model):
+    def _get_params(self, model):
         params = {}
         i=0
         for p in model.parameters():
@@ -973,7 +973,7 @@ class AcousticID():
         for t in range(100000):
             y_pred = model.forward(thickness)
 
-            loss = self._criterion(y_pred, y, self.get_params(model))
+            loss = self._criterion(y_pred, y, self._get_params(model))
            
             if loss < 2000:
                 for g in optimizer.param_groups:
