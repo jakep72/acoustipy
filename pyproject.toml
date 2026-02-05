@@ -16,13 +16,35 @@ readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
 dependencies = [
-    "pandas",
-    "scipy",
-    "matplotlib",
-    "numpy"
+    "numpy>=1.23",
+    "pandas>=1.5",
+    "scipy>=1.9",
+    "matplotlib>=3.5",
+    "torch>=2.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "coverage-lcov>=0.2.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/jakep72/acoustipy"
+Documentation = "https://jakep72.github.io/acoustipy/"
+Repository = "https://github.com/jakep72/acoustipy"
+Issues = "https://github.com/jakep72/acoustipy/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
