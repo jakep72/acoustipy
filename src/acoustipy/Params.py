@@ -92,8 +92,18 @@ class AcousticID():
                  Cv: float = 0.717425,
                  viscosity: float = 1.825e-05,
                  Pr: float = 0.7157,
-                 P0: float = 101325
+                 P0: float = 101325,
+                 device: str = 'cpu'
                  ):
+        """
+        Initialize AcousticID parameter identification object.
+        
+        Parameters
+        ----------
+        device : str, optional
+            Device for computations ('cpu' or 'cuda'). Default is 'cpu'.
+            GPU acceleration is primarily used by the ML method.
+        """
         # Validate mount_type
         if mount_type not in self.VALID_MOUNT_TYPES:
             raise ValueError(
@@ -121,6 +131,7 @@ class AcousticID():
         self.P0 = P0
         self.opt_type = mount_type
         self.input_type = input_type
+        self.device = device
         self.thickness = None
         self.flow_resistivity = None
         self.porosity = None
@@ -1056,6 +1067,7 @@ class AcousticID():
             Normalized initial guesses for (flow_resistivity, porosity, tortuosity, vcl, tcl).
         """
         print("Starting grid search...")
+        # Grid search is done on CPU for simplicity (small computation)
         fr = torch.linspace(10000, 1000000, 5)
         phi = torch.linspace(0.05, 0.95, 10)
         tau = torch.linspace(1, 4.5, 5)
@@ -1064,17 +1076,20 @@ class AcousticID():
         best_err = float('inf')
         best_fr = best_phi = best_tau = best_vcl = best_tcl = None
         
+        # Move base_abs to CPU for comparison
+        base_abs_cpu = base_abs.cpu() if base_abs.is_cuda else base_abs
+        
         for f in fr:
             for p in phi:
                 for t in tau:
                     for v in vcl:
                         for tc in tcl:
                             if tc >= v:
-                                s = AcousticTMM(incidence='Normal', air_temperature=20)
+                                s = AcousticTMM(incidence='Normal', air_temperature=20, device='cpu')
                                 layer = s.Add_JCA_Layer(thickness, f, p, t, v, tc)
                                 tm = s.assemble_structure(layer)
                                 a = s.absorption(tm)[:, 1].float()
-                                err = torch.sum(torch.diff(a - base_abs) ** 2)
+                                err = torch.sum(torch.diff(a - base_abs_cpu) ** 2)
                                 
                                 if err < best_err:
                                     best_err = err
@@ -1141,8 +1156,16 @@ class AcousticID():
             raise ValueError("learning_rate must be positive")
         
         y = self.meas_abs[0]
+        # Move target data to the configured device
+        if isinstance(y, torch.Tensor):
+            y = y.to(self.device)
+        else:
+            y = torch.tensor(y, device=self.device)
+        
         fr, phi, tau, vcl, tcl1 = self._gridsearch(y, thickness)
-        model = JCAModel(fr, phi, tau, vcl, tcl1, self.frequency)
+        
+        # Create model on configured device
+        model = JCAModel(fr, phi, tau, vcl, tcl1, self.frequency, device=self.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         
         # Store initial learning rate for adaptive scheduling
@@ -1410,41 +1433,96 @@ class AcousticID():
         s.close()
 
 class JCAModel(AcousticTMM):
+    """
+    PyTorch model for JCA parameter optimization using gradient descent.
+    
+    This model wraps AcousticTMM to enable gradient-based optimization of
+    JCA material parameters.
+    
+    Parameters
+    ----------
+    best_fr : torch.Tensor
+        Initial normalized flow resistivity guess.
+    best_phi : torch.Tensor
+        Initial porosity guess.
+    best_tau : torch.Tensor
+        Initial normalized tortuosity guess.
+    best_vcl : torch.Tensor
+        Initial normalized viscous characteristic length guess.
+    best_tcl : torch.Tensor
+        Initial normalized thermal characteristic length guess.
+    freq : torch.Tensor
+        Frequency array for calculations.
+    device : str, optional
+        Device for computations ('cpu' or 'cuda'). Default is 'cpu'.
+    """
+    
     def __init__(self,
                  best_fr,
                  best_phi,
                  best_tau,
                  best_vcl,
                  best_tcl,
-                 freq):
+                 freq,
+                 device: str = 'cpu'):
 
-        super().__init__()
-        self.fr = torch.nn.Parameter(best_fr)
-        self.phi = torch.nn.Parameter(best_phi)
-        self.tau = torch.nn.Parameter(best_tau)
-        self.vcl = torch.nn.Parameter(best_vcl)
-        self.tcl = torch.nn.Parameter(best_tcl)
-        self.structure = AcousticTMM(incidence='Normal', air_temperature=20)
+        super().__init__(device=device)
+        self._device = device
+        
+        # Ensure initial values are tensors on the correct device
+        self.fr = torch.nn.Parameter(torch.tensor(best_fr, device=device) if not isinstance(best_fr, torch.Tensor) else best_fr.to(device))
+        self.phi = torch.nn.Parameter(torch.tensor(best_phi, device=device) if not isinstance(best_phi, torch.Tensor) else best_phi.to(device))
+        self.tau = torch.nn.Parameter(torch.tensor(best_tau, device=device) if not isinstance(best_tau, torch.Tensor) else best_tau.to(device))
+        self.vcl = torch.nn.Parameter(torch.tensor(best_vcl, device=device) if not isinstance(best_vcl, torch.Tensor) else best_vcl.to(device))
+        self.tcl = torch.nn.Parameter(torch.tensor(best_tcl, device=device) if not isinstance(best_tcl, torch.Tensor) else best_tcl.to(device))
+        
+        self.structure = AcousticTMM(incidence='Normal', air_temperature=20, device=device)
         self.structure.frequency = freq
         self.thickness = None
     
-    def forward(self, thickness):
+    def forward(self, thickness: float) -> torch.Tensor:
+        """
+        Compute absorption coefficients for current parameters.
+        
+        Parameters
+        ----------
+        thickness : float
+            Sample thickness in millimeters.
+            
+        Returns
+        -------
+        torch.Tensor
+            Absorption coefficients at each frequency.
+        """
         self.thickness = thickness
-        layer = self.structure.Add_JCA_Layer(thickness, self.fr*1000000, self.phi, self.tau*5, self.vcl*500, self.tcl*500)
+        layer = self.structure.Add_JCA_Layer(
+            thickness, 
+            self.fr * 1000000, 
+            self.phi, 
+            self.tau * 5, 
+            self.vcl * 500, 
+            self.tcl * 500
+        )
         tm = self.structure.assemble_structure(layer)
-        a = self.structure.absorption(tm)[:,1].float()
+        a = self.structure.absorption(tm)[:, 1].float()
         return a
     
-    def string(self):
-        return f'fr = {self.fr.item()*1000000} phi = {self.phi.item()} tau = {self.tau.item()*5} vcl = {self.vcl.item()*500} tcl = {self.tcl.item()*500}'
+    def string(self) -> str:
+        """Return string representation of current parameters."""
+        return (f'fr = {self.fr.item()*1000000:.1f} '
+                f'phi = {self.phi.item():.4f} '
+                f'tau = {self.tau.item()*5:.3f} '
+                f'vcl = {self.vcl.item()*500:.1f} '
+                f'tcl = {self.tcl.item()*500:.1f}')
     
-    def results(self):
-        result_dict = {'thickness': self.thickness,
-                'flow resistivity': self.fr.item()*1000000,
-                'porosity': self.phi.item(),
-                'tortuosity': self.tau.item()*5,
-                'viscous characteristic length': self.vcl.item()*500,
-                'thermal characteristic length': self.tcl.item()*500,
-                'air gap':0
+    def results(self) -> dict:
+        """Return identified parameters as a dictionary."""
+        return {
+            'thickness': self.thickness,
+            'flow resistivity': self.fr.item() * 1000000,
+            'porosity': self.phi.item(),
+            'tortuosity': self.tau.item() * 5,
+            'viscous characteristic length': self.vcl.item() * 500,
+            'thermal characteristic length': self.tcl.item() * 500,
+            'air gap': 0
         }
-        return result_dict

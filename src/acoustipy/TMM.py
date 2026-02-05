@@ -105,31 +105,37 @@ class AcousticTMM(torch.nn.Module):
         self.fs = fs
         self.incidence = incidence
         self.angles = angles
-        self.THIRD_OCTAVE_PREFERRED = torch.asarray([16,20,25,31.5,40,50,63,
-                                                  80,100,125,160,200,250,
-                                                  315,400,500,630,800,1000,
-                                                  1250,1600,2000,2500,3150,
-                                                  4000,5000,6300,8000,10000,
-                                                  12500,16000,20000])
-        self.OCTAVE_PREFERRED  = self.THIRD_OCTAVE_PREFERRED[0::3]
         self.Cp = Cp
         self.Cv = Cv
         self.viscosity = viscosity
         self.Pr = Pr
         self.P0 = P0
         self.device = device
-        self._custom_freq =  torch.arange(self.fmin,self.fmax+self.fs,self.fs)
+        
+        # Create tensors on the specified device
+        self.THIRD_OCTAVE_PREFERRED = torch.tensor(
+            [16, 20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250,
+             315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150,
+             4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000],
+            device=self.device
+        )
+        self.OCTAVE_PREFERRED = self.THIRD_OCTAVE_PREFERRED[0::3]
+        self._custom_freq = torch.arange(self.fmin, self.fmax + self.fs, self.fs, device=self.device)
         self.layers = []
         
 
     @property
     def frequency(self):
-        #frequency range of interest
-        return(self._custom_freq)
+        """Frequency range of interest, on the configured device."""
+        return self._custom_freq
     
     @frequency.setter
     def frequency(self, value):
-        self._custom_freq = value
+        """Set frequency range, ensuring it's on the correct device."""
+        if isinstance(value, torch.Tensor):
+            self._custom_freq = value.to(self.device)
+        else:
+            self._custom_freq = torch.tensor(value, device=self.device)
 
     @property
     def ang_freq(self):
@@ -188,9 +194,9 @@ class AcousticTMM(torch.nn.Module):
     
     @property
     def k0(self):
-        #Wavenumber
+        """Wavenumber, on the configured device."""
         k0 = self.ang_freq / self.soundspeed_temp
-        return (k0)
+        return k0.to(self.device) if isinstance(k0, torch.Tensor) else k0
     
     @property
     def Z0(self):

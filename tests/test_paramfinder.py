@@ -1,5 +1,6 @@
 from acoustipy import AcousticTMM
 from acoustipy import AcousticID
+from acoustipy import cuda_available, get_device
 import os
 import pytest
 import torch
@@ -570,3 +571,80 @@ class TestAcousticIDPhysicalValidation:
 
         with pytest.raises(ValueError, match="Thickness must be positive"):
             inv.ML(thickness=-10, verbose=False)
+
+
+class TestDeviceHandling:
+    """Tests for device (CPU/CUDA) handling."""
+    
+    def test_cuda_available_returns_bool(self):
+        """Test that cuda_available returns a boolean."""
+        result = cuda_available()
+        assert isinstance(result, bool)
+    
+    def test_get_device_returns_string(self):
+        """Test that get_device returns a valid device string."""
+        device = get_device()
+        assert device in ('cpu', 'cuda')
+    
+    def test_get_device_cpu_only(self):
+        """Test that get_device returns 'cpu' when prefer_cuda is False."""
+        device = get_device(prefer_cuda=False)
+        assert device == 'cpu'
+    
+    def test_acoustic_tmm_device_parameter(self):
+        """Test that AcousticTMM accepts and uses device parameter."""
+        structure = AcousticTMM(incidence='Normal', air_temperature=20, device='cpu')
+        assert structure.device == 'cpu'
+        
+        # Verify tensors are on the correct device
+        assert structure.frequency.device.type == 'cpu'
+        assert structure.k0.device.type == 'cpu'
+    
+    def test_acoustic_tmm_frequency_on_device(self):
+        """Test that frequency tensor stays on configured device."""
+        structure = AcousticTMM(incidence='Normal', device='cpu')
+        
+        # Verify initial frequency is on device
+        assert structure.frequency.device.type == 'cpu'
+        
+        # Set a new frequency and verify it's moved to device
+        new_freq = torch.arange(100, 1000, 10)
+        structure.frequency = new_freq
+        assert structure.frequency.device.type == 'cpu'
+    
+    def test_acoustic_id_device_parameter(self, tmpdir):
+        """Test that AcousticID accepts device parameter."""
+        no_gap_file = tmpdir.join("no_gap.csv")
+        no_gap_file.write("100,0.5\n200,0.6\n")
+        
+        inv = AcousticID(
+            mount_type='No Gap',
+            no_gap_file=str(no_gap_file),
+            input_type='absorption',
+            device='cpu'
+        )
+        assert inv.device == 'cpu'
+    
+    def test_layer_creation_on_device(self):
+        """Test that layer creation works with device parameter."""
+        structure = AcousticTMM(incidence='Normal', device='cpu')
+        layer = structure.Add_JCA_Layer(30, 46182, .917, 2.1, 83, 128)
+        
+        # Layer returns [TM, thickness, name]
+        tm = layer[0]
+        assert tm.device.type == 'cpu'
+    
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_acoustic_tmm_cuda(self):
+        """Test AcousticTMM on CUDA device (only runs if CUDA available)."""
+        structure = AcousticTMM(incidence='Normal', device='cuda')
+        assert structure.device == 'cuda'
+        
+        layer = structure.Add_JCA_Layer(30, 46182, .917, 2.1, 83, 128)
+        tm = layer[0]
+        assert tm.device.type == 'cuda'
+        
+        assembled = structure.assemble_structure(layer)
+        absorption = structure.absorption(assembled)
+        # Absorption is moved to CPU for output
+        assert absorption.device.type == 'cpu'
