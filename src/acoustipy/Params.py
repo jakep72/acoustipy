@@ -76,20 +76,50 @@ class AcousticID():
         Atmospheric pressure [Pa]
 
     """
+    # Valid options for mount_type and input_type
+    VALID_MOUNT_TYPES = ('No Gap', 'Gap', 'Dual')
+    VALID_INPUT_TYPES = ('absorption', 'reflection', 'surface')
+
     def __init__(self,
-                 mount_type:str = "No Gap",
-                 no_gap_file:str = None,
-                 gap_file:str = None,
-                 input_type:str = 'absorption',
-                 air_temperature:float = None,
-                 sound_speed:float = 343.152,
-                 air_density:float = 1.2058,
-                 Cp:float = 1.004425,
-                 Cv:float = 0.717425,
-                 viscosity:float = 1.825e-05,
-                 Pr:float = .7157,
-                 P0:float = 101325
+                 mount_type: str = "No Gap",
+                 no_gap_file: str = None,
+                 gap_file: str = None,
+                 input_type: str = 'absorption',
+                 air_temperature: float = None,
+                 sound_speed: float = 343.152,
+                 air_density: float = 1.2058,
+                 Cp: float = 1.004425,
+                 Cv: float = 0.717425,
+                 viscosity: float = 1.825e-05,
+                 Pr: float = 0.7157,
+                 P0: float = 101325,
+                 device: str = 'cpu'
                  ):
+        """
+        Initialize AcousticID parameter identification object.
+        
+        Parameters
+        ----------
+        device : str, optional
+            Device for computations ('cpu' or 'cuda'). Default is 'cpu'.
+            GPU acceleration is primarily used by the ML method.
+        """
+        # Validate mount_type
+        if mount_type not in self.VALID_MOUNT_TYPES:
+            raise ValueError(
+                f"Invalid mount_type '{mount_type}'. "
+                f"Must be one of: {', '.join(self.VALID_MOUNT_TYPES)}"
+            )
+        
+        # Validate input_type
+        if input_type not in self.VALID_INPUT_TYPES:
+            raise ValueError(
+                f"Invalid input_type '{input_type}'. "
+                f"Must be one of: {', '.join(self.VALID_INPUT_TYPES)}"
+            )
+        
+        # Validate required files based on mount_type
+        self._validate_files(mount_type, no_gap_file, gap_file)
 
         self.temp = air_temperature
         self.speed = sound_speed
@@ -101,47 +131,92 @@ class AcousticID():
         self.P0 = P0
         self.opt_type = mount_type
         self.input_type = input_type
+        self.device = device
         self.thickness = None
         self.flow_resistivity = None
         self.porosity = None
         self.uncertainty = None
         self.air_gap = None
+
+        # Load data based on mount type and input type
+        data_type = 'float' if input_type == 'absorption' else 'complex'
         
+        if mount_type == 'No Gap':
+            self.no_gap_data = self.load_to_array(no_gap_file, type=data_type)
+
+        elif mount_type == 'Gap':
+            self.gap_data = self.load_to_array(gap_file, type=data_type)
+
+        elif mount_type == 'Dual':
+            self.no_gap_data = self.load_to_array(no_gap_file, type=data_type)
+            self.gap_data = self.load_to_array(gap_file, type=data_type)
+    
+    @staticmethod
+    def _validate_files(mount_type: str, no_gap_file: str, gap_file: str) -> None:
+        """
+        Validate that required files are provided and exist.
         
-
-        if self.opt_type == 'No Gap':
-            if self.input_type == 'reflection':
-                self.no_gap_data = self.load_to_array(no_gap_file)
-                          
-            elif self.input_type == 'surface':
-                self.no_gap_data = self.load_to_array(no_gap_file)
-                
-            elif self.input_type == 'absorption':
-                    self.no_gap_data = self.load_to_array(no_gap_file,type='float')
-
-        elif self.opt_type == 'Gap':
-            if self.input_type == 'reflection':    
-                self.gap_data = self.load_to_array(gap_file)
+        Parameters
+        ----------
+        mount_type : str
+            The mounting type being used.
+        no_gap_file : str
+            Path to the no-gap data file.
+        gap_file : str
+            Path to the gap data file.
             
-            elif self.input_type == 'surface':
-                self.gap_data = self.load_to_array(gap_file)
-                
-            elif self.input_type == 'absorption':
-                    self.gap_data = self.load_to_array(gap_file,type='float')
-
-        elif self.opt_type == 'Dual':
-            if self.input_type == 'reflection':
-                self.no_gap_data = self.load_to_array(no_gap_file)
-                self.gap_data = self.load_to_array(gap_file)
+        Raises
+        ------
+        ValueError
+            If required files are not provided or do not exist.
+        """
+        import os
+        
+        if mount_type in ('No Gap', 'Dual'):
+            if no_gap_file is None:
+                raise ValueError(f"no_gap_file is required for mount_type='{mount_type}'")
+            if not os.path.exists(no_gap_file):
+                raise FileNotFoundError(f"no_gap_file not found: {no_gap_file}")
+        
+        if mount_type in ('Gap', 'Dual'):
+            if gap_file is None:
+                raise ValueError(f"gap_file is required for mount_type='{mount_type}'")
+            if not os.path.exists(gap_file):
+                raise FileNotFoundError(f"gap_file not found: {gap_file}")
+    
+    @staticmethod
+    def _validate_physical_params(thickness: float, flow_resistivity: float, 
+                                   porosity: float, air_gap: float = 0) -> None:
+        """
+        Validate that material parameters are physically reasonable.
+        
+        Parameters
+        ----------
+        thickness : float
+            Sample thickness in mm.
+        flow_resistivity : float
+            Flow resistivity in Pa*s/m^2.
+        porosity : float
+            Open porosity (0-1).
+        air_gap : float, optional
+            Air gap thickness in mm.
             
-            elif self.input_type == 'surface':
-                self.no_gap_data = self.load_to_array(no_gap_file)
-                self.gap_data = self.load_to_array(gap_file)
-                
-
-            elif self.input_type == 'absorption':
-                self.no_gap_data = self.load_to_array(no_gap_file,type='float')
-                self.gap_data = self.load_to_array(gap_file,type='float')
+        Raises
+        ------
+        ValueError
+            If parameters are physically invalid.
+        """
+        if thickness <= 0:
+            raise ValueError(f"Thickness must be positive, got {thickness}")
+        
+        if flow_resistivity <= 0:
+            raise ValueError(f"Flow resistivity must be positive, got {flow_resistivity}")
+        
+        if not (0 < porosity <= 1):
+            raise ValueError(f"Porosity must be in range (0, 1], got {porosity}")
+        
+        if air_gap < 0:
+            raise ValueError(f"Air gap cannot be negative, got {air_gap}")
         
     @property
     def frequency(self):
@@ -156,13 +231,13 @@ class AcousticID():
             return(gap_freq)
         
         elif self.opt_type == 'Dual':
-            no_gap_freq = torch.tensor(self.no_gap_data[:,0]).real
-            gap_freq = torch.tensor(self.gap_data[:,0]).real
+            no_gap_freq = torch.tensor(self.no_gap_data[:, 0]).real
+            gap_freq = torch.tensor(self.gap_data[:, 0]).real
         
-            if np.array_equal(no_gap_freq,gap_freq) != True:
+            if not torch.equal(no_gap_freq, gap_freq):
                 raise ValueError("Frequencies must match between no gap and gap absorption curves")
             else:
-                return(no_gap_freq)
+                return no_gap_freq
 
 
     @property
@@ -357,34 +432,27 @@ class AcousticID():
             return([no_gap_pred,gap_pred])
            
     def _error(self,
-               x: list) -> float:
+               x: list) -> tuple[float, np.ndarray]:
         """
         Function that is minimized in the optimization routine. Calculates the error between the measured (impedance tube)
         and predicted (TMM) absorption coefficients.
 
         Parameters
         ----------
-        x (list):
-            list structure containing the identified thickness, flow resistivity, porosity, tortuosity, viscous characteristic length,
+        x : list
+            List containing the identified thickness, flow resistivity, porosity, tortuosity, viscous characteristic length,
             thermal characteristic length, and air gap thickness of the sample (in that order).
 
         Returns
         -------
-        err (float):
-            if opt_type is 'No Gap' or 'Gap' --> sum of the absolute square difference between measured and predicted absorption coefficients across all specified frequencies.
-            if opt_type is 'Dual', the error for each mounting condition is averaged into a single error metric
-        
+        err : float
+            If opt_type is 'No Gap' or 'Gap': sum of the absolute square difference between measured and predicted 
+            absorption coefficients across all specified frequencies.
+            If opt_type is 'Dual': the error for each mounting condition is averaged into a single error metric.
+        grad : np.ndarray
+            Gradient of the error with respect to the parameters.
         """
         params = torch.tensor(x, requires_grad=True)
-        # t = x[0]
-        # fr = x[1]
-        # phi = x[2]
-        # tort = x[3]
-        # vcl = x[4]
-        # tcl = x[5]
-        # air = x[6]
-
-        # params = {'thickness':t,'flow resistivity':fr,'porosity':phi,'tortuosity':tort,'viscous characteristic length':vcl,'thermal characteristic length':tcl,'air gap':air}
 
         A = self._predictionJCA(params, optimize=True)
         
@@ -505,20 +573,26 @@ class AcousticID():
 
         Returns
         -------
-        result_dict (dict):
-            dictionary containing the identified parameters associated with the lowest calculated error.
+        result_dict : dict
+            Dictionary containing the identified parameters associated with the lowest calculated error.
         
+        Raises
+        ------
+        ValueError
+            If input parameters are physically invalid.
         """
+        # Validate physical constraints
+        self._validate_physical_params(thickness, flow_resistivity, porosity, air_gap)
+        
         self.thickness = thickness
         self.flow_resistivity = flow_resistivity
         self.porosity = porosity
         self.air_gap = air_gap
 
-        if uncertainty >= 0 and uncertainty <= 1:
+        if 0 <= uncertainty <= 1:
             self.uncertainty = uncertainty
-
         else:
-            print("Uncertainty must be between 0 and 1, reverting to default uncertainty of 1.0%!")
+            warnings.warn("Uncertainty must be between 0 and 1, reverting to default uncertainty of 1.0%!")
             self.uncertainty = 0.01
 
         init_tort = 2.5
@@ -816,22 +890,36 @@ class AcousticID():
 
         Returns
         -------
-        result_dict (dict):
-            dictionary containing the identified parameters associated with the lowest calculated error.
+        result_dict : dict
+            Dictionary containing the identified parameters associated with the lowest calculated error.
         
+        Raises
+        ------
+        ValueError
+            If input parameters are physically invalid.
         """
+        # Validate physical constraints (flow_resistivity can be None for Hybrid)
+        if thickness <= 0:
+            raise ValueError(f"Thickness must be positive, got {thickness}")
+        if not (0 < porosity <= 1):
+            raise ValueError(f"Porosity must be in range (0, 1], got {porosity}")
+        if air_gap < 0:
+            raise ValueError(f"Air gap cannot be negative, got {air_gap}")
+        if flow_resistivity is not None and flow_resistivity <= 0:
+            raise ValueError(f"Flow resistivity must be positive, got {flow_resistivity}")
+        
         self.thickness = thickness
         self.porosity = porosity
         self.air_gap = air_gap
-        if uncertainty >= 0 and uncertainty <= 1:
-            self.uncertainty = uncertainty
-
-        else:
-            print("Uncertainty must be between 0 and 1, reverting to default uncertainty of 1.0%!")
-            self.uncertainty = 0.01
         
+        if 0 <= uncertainty <= 1:
+            self.uncertainty = uncertainty
+        else:
+            warnings.warn("Uncertainty must be between 0 and 1, reverting to default uncertainty of 1.0%!")
+            self.uncertainty = 0.01
 
-        indirect_results = self.Indirect(thickness=self.thickness,porosity=self.porosity, flow_resistivity=flow_resistivity,air_gap=self.air_gap)
+        indirect_results = self.Indirect(thickness=self.thickness, porosity=self.porosity, 
+                                         flow_resistivity=flow_resistivity, air_gap=self.air_gap)
         
         if np.isnan(indirect_results['thermal characteristic length']):
             indirect_results['thermal characteristic length'] = indirect_results['viscous characteristic length']
@@ -903,157 +991,282 @@ class AcousticID():
             
             return(result_dict)
         
-    def _criterion(self, y1, y2,params):
-        err = 1e12*torch.sum(torch.diff(y1-y2)**2)
+    def _criterion(self, y1: torch.Tensor, y2: torch.Tensor, params: dict) -> torch.Tensor:
+        """
+        Loss function for the ML optimization method with penalty terms for invalid parameters.
+
+        Parameters
+        ----------
+        y1 : torch.Tensor
+            Predicted absorption coefficients.
+        y2 : torch.Tensor
+            Measured absorption coefficients.
+        params : dict
+            Dictionary of current parameter values (normalized).
+
+        Returns
+        -------
+        err : torch.Tensor
+            Weighted error value including penalties for physically invalid parameters.
+        """
+        err = 1e12 * torch.sum(torch.diff(y1 - y2) ** 2)
         if params['vcl'] > params['tcl']:
-            err = 2*err
+            err = 2 * err
         if params['fr'] > 1 or params['fr'] < 0:
-            err = 2*err
+            err = 2 * err
         if params['phi'] > 1 or params['phi'] < 0.001:
-            err = 10*err
+            err = 10 * err
         if params['tau'] > 1 or params['tau'] < 0.2:
-            err = 2*err
+            err = 2 * err
         if params['vcl'] > 1 or params['tcl'] > 1:
-            err = 10*err
-        return(err)
+            err = 10 * err
+        return err
     
-    def _get_params(self, model):
+    def _get_params(self, model: torch.nn.Module) -> dict:
+        """
+        Extract current parameter values from a JCAModel.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            The JCAModel instance containing learnable parameters.
+
+        Returns
+        -------
+        params : dict
+            Dictionary containing normalized parameter values (fr, phi, tau, vcl, tcl).
+        """
         params = {}
-        i=0
-        for p in model.parameters():
+        for i, p in enumerate(model.parameters()):
             if i == 0:
                 params['fr'] = p.item()
-            if i == 1:
+            elif i == 1:
                 params['phi'] = p.item()
-            if i == 2:
+            elif i == 2:
                 params['tau'] = p.item()
-            if i == 3:
+            elif i == 3:
                 params['vcl'] = p.item()
-            if i == 4:
+            elif i == 4:
                 params['tcl'] = p.item()
-            i += 1
         return params
     
-    def _gridsearch(self, base_abs, thickness):
+    def _gridsearch(self, base_abs: torch.Tensor, thickness: float) -> tuple:
+        """
+        Perform a coarse grid search to find good initial parameter estimates for the ML optimizer.
+
+        Parameters
+        ----------
+        base_abs : torch.Tensor
+            Measured absorption coefficients to match.
+        thickness : float
+            Sample thickness in millimeters.
+
+        Returns
+        -------
+        tuple
+            Normalized initial guesses for (flow_resistivity, porosity, tortuosity, vcl, tcl).
+        """
         print("Starting grid search...")
-        fr = torch.linspace(10000,1000000,5)
-        phi = torch.linspace(0.05,.95,10)
-        tau = torch.linspace(1,4.5,5)
+        # Grid search is done on CPU for simplicity (small computation)
+        fr = torch.linspace(10000, 1000000, 5)
+        phi = torch.linspace(0.05, 0.95, 10)
+        tau = torch.linspace(1, 4.5, 5)
         vcl = torch.linspace(10, 450, 10)
-        tcl = torch.linspace(10, 450,10)
-        best_err = 10
+        tcl = torch.linspace(10, 450, 10)
+        best_err = float('inf')
+        best_fr = best_phi = best_tau = best_vcl = best_tcl = None
+        
+        # Move base_abs to CPU for comparison
+        base_abs_cpu = base_abs.cpu() if base_abs.is_cuda else base_abs
+        
         for f in fr:
             for p in phi:
                 for t in tau:
                     for v in vcl:
                         for tc in tcl:
                             if tc >= v:
-                                s = AcousticTMM(incidence='Normal',air_temperature=20)
-                                l = s.Add_JCA_Layer(thickness,f,p,t,v,tc)
-                                tm = s.assemble_structure(l)
-                                a = s.absorption(tm)[:,1].float()
-                                err = torch.sum(torch.diff(a-base_abs)**2)
+                                s = AcousticTMM(incidence='Normal', air_temperature=20, device='cpu')
+                                layer = s.Add_JCA_Layer(thickness, f, p, t, v, tc)
+                                tm = s.assemble_structure(layer)
+                                a = s.absorption(tm)[:, 1].float()
+                                err = torch.sum(torch.diff(a - base_abs_cpu) ** 2)
                                 
                                 if err < best_err:
                                     best_err = err
-                                    best_fr = f/1000000
+                                    best_fr = f / 1000000
                                     best_phi = p
-                                    best_tau = t/5
-                                    best_vcl = v/500
-                                    best_tcl = tc/500
+                                    best_tau = t / 5
+                                    best_vcl = v / 500
+                                    best_tcl = tc / 500
 
-        return(best_fr, best_phi, best_tau, best_vcl, best_tcl)
+        return best_fr, best_phi, best_tau, best_vcl, best_tcl
     
-    def ML(self, thickness, verbose: bool=True):
-        y=self.meas_abs[0]
-        fr, phi, tau, vcl, tcl1 = self._gridsearch(y, thickness)
-        model = JCAModel(fr, phi, tau, vcl, tcl1, self.frequency)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    def ML(self, 
+           thickness: float, 
+           verbose: bool = True,
+           max_iterations: int = 100000,
+           learning_rate: float = 1e-3,
+           early_stopping_loss: float = 8.0) -> dict:
+        """
+        Machine learning-based parameter identification using gradient descent optimization.
+        
+        This method uses the Adam optimizer to find JCA model parameters by minimizing 
+        the difference between predicted and measured absorption coefficients. It first 
+        performs a coarse grid search to find good initial estimates, then refines them
+        using gradient descent.
 
-        for t in range(100000):
+        Parameters
+        ----------
+        thickness : float
+            The measured thickness of the sample in millimeters.
+        verbose : bool, optional
+            If True, prints optimization progress every 100 iterations (default is True).
+        max_iterations : int, optional
+            Maximum number of optimization iterations (default is 100000).
+        learning_rate : float, optional
+            Initial learning rate for the Adam optimizer (default is 1e-3).
+            The learning rate is automatically reduced as the loss decreases.
+        early_stopping_loss : float, optional
+            Stop optimization when loss falls below this value (default is 8.0).
+
+        Returns
+        -------
+        result_dict : dict
+            Dictionary containing the identified parameters: thickness, flow resistivity,
+            porosity, tortuosity, viscous characteristic length, thermal characteristic length,
+            and air gap.
+
+        Notes
+        -----
+        This method requires 'No Gap' mounting condition and uses adaptive learning rate
+        scheduling to improve convergence. The learning rate is reduced at loss thresholds
+        of 2000, 250, and 10.
+        
+        Raises
+        ------
+        ValueError
+            If thickness is not positive.
+        """
+        # Input validation
+        if thickness <= 0:
+            raise ValueError("Thickness must be positive")
+        if max_iterations <= 0:
+            raise ValueError("max_iterations must be positive")
+        if learning_rate <= 0:
+            raise ValueError("learning_rate must be positive")
+        
+        y = self.meas_abs[0]
+        # Move target data to the configured device
+        if isinstance(y, torch.Tensor):
+            y = y.to(self.device)
+        else:
+            y = torch.tensor(y, device=self.device)
+        
+        fr, phi, tau, vcl, tcl1 = self._gridsearch(y, thickness)
+        
+        # Create model on configured device
+        model = JCAModel(fr, phi, tau, vcl, tcl1, self.frequency, device=self.device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        
+        # Store initial learning rate for adaptive scheduling
+        initial_lr = learning_rate
+
+        for t in range(max_iterations):
             y_pred = model.forward(thickness)
 
             loss = self._criterion(y_pred, y, self._get_params(model))
            
+            # Adaptive learning rate scheduling
             if loss < 2000:
                 for g in optimizer.param_groups:
-                    g['lr'] = 5e-4
+                    g['lr'] = initial_lr * 0.5
             if loss < 250:
                 for g in optimizer.param_groups:
-                    g['lr'] = 1e-4
+                    g['lr'] = initial_lr * 0.1
             if loss < 10:
                 for g in optimizer.param_groups:
-                    g['lr'] = 5e-5
-            if loss < 8:
+                    g['lr'] = initial_lr * 0.05
+            if loss < early_stopping_loss:
+                if verbose:
+                    print(f"Converged at iteration {t} with loss {loss.item():.4f}")
                 break
 
             if t % 100 == 0 and verbose:
-                print(t, loss.item(), model.string())
+                print(f"Iteration {t}: loss={loss.item():.4f}, {model.string()}")
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            # self._clamper(model)
 
         return model.results()
 
-    def stats(self,
-              parameters:dict) -> dict:
+    def _to_numpy(self, data) -> np.ndarray:
+        """
+        Convert data to numpy array, handling torch tensors.
+        
+        Parameters
+        ----------
+        data : torch.Tensor or np.ndarray or array-like
+            Data to convert.
+            
+        Returns
+        -------
+        np.ndarray
+            Data as numpy array.
+        """
+        if isinstance(data, torch.Tensor):
+            return data.detach().cpu().numpy()
+        return np.asarray(data)
+
+    def stats(self, parameters: dict) -> dict:
         """
         Calculates statistics about the parameters identified in the optimization routine via linear regression of the predicted vs measured
         absorption coefficients.
 
         Parameters
         ----------
-        parameters (dict):
-            dictionary containing the identified thickness, flow resistivity, porosity, tortuosity, 
+        parameters : dict
+            Dictionary containing the identified thickness, flow resistivity, porosity, tortuosity, 
             viscous characteristic length, thermal characteristic length, and air gap of the sample.
 
         Returns
         -------
-        stats (dict):
-            dictionary containing the slope, intercept, r value, p value, and std error returned from the linear regression.
+        stats : dict
+            Dictionary containing the slope, intercept, r value, p value, and std error returned from the linear regression.
             If 'Dual' opt_type is specified, the statistics for each mounting condition are averaged.
-        
         """
         if self.opt_type == 'No Gap':
-            x = self.meas_abs[0]
-            y = self._predictionJCA(parameters, optimize=False)
+            x = self._to_numpy(self.meas_abs[0])
+            y = self._to_numpy(self._predictionJCA(parameters, optimize=False))
             
-            slope,intercept,r_value,p_value,std_err = scipy.stats.linregress(x,y)
-            stats = {'slope':slope,'intercept':intercept,'r_value':r_value,'p_value':p_value,'std_err':std_err}
-            
-            return(stats)
+            slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(x, y)
+            return {'slope': slope, 'intercept': intercept, 'r_value': r_value, 'p_value': p_value, 'std_err': std_err}
         
         elif self.opt_type == 'Gap':
-            x = self.meas_abs[1]
-            y = self._predictionJCA(parameters, optimize=False)
+            x = self._to_numpy(self.meas_abs[1])
+            y = self._to_numpy(self._predictionJCA(parameters, optimize=False))
             
-            slope,intercept,r_value,p_value,std_err = scipy.stats.linregress(x,y)
-            stats = {'slope':slope,'intercept':intercept,'r_value':r_value,'p_value':p_value,'std_err':std_err}
-
-            return(stats)
+            slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(x, y)
+            return {'slope': slope, 'intercept': intercept, 'r_value': r_value, 'p_value': p_value, 'std_err': std_err}
         
         elif self.opt_type == 'Dual':
-            x1 = self.meas_abs[0]
-            y1 = self._predictionJCA(parameters, optimize=False)[0]
+            x1 = self._to_numpy(self.meas_abs[0])
+            y1 = self._to_numpy(self._predictionJCA(parameters, optimize=False)[0])
             
-            slope1,intercept1,r_value1,p_value1,std_err1 = scipy.stats.linregress(x1,y1)
+            slope1, intercept1, r_value1, p_value1, std_err1 = scipy.stats.linregress(x1, y1)
             
-            x2 = self.meas_abs[1]
-            y2 = self._predictionJCA(parameters, optimize=False)[1]
+            x2 = self._to_numpy(self.meas_abs[1])
+            y2 = self._to_numpy(self._predictionJCA(parameters, optimize=False)[1])
             
-            slope2,intercept2,r_value2,p_value2,std_err2 = scipy.stats.linregress(x2,y2)
+            slope2, intercept2, r_value2, p_value2, std_err2 = scipy.stats.linregress(x2, y2)
             
-            slope = np.abs((slope1+slope2)/2)
-            intercept = np.abs((intercept1+intercept2)/2)
-            r_value = np.abs((r_value1+r_value2)/2)
-            p_value = np.abs((p_value1+p_value2)/2)
-            std_err = np.abs((std_err1+std_err2)/2)
+            slope = np.abs((slope1 + slope2) / 2)
+            intercept = np.abs((intercept1 + intercept2) / 2)
+            r_value = np.abs((r_value1 + r_value2) / 2)
+            p_value = np.abs((p_value1 + p_value2) / 2)
+            std_err = np.abs((std_err1 + std_err2) / 2)
                         
-            stats = {'slope':slope,'intercept':intercept,'r_value':r_value,'p_value':p_value,'std_err':std_err}
-            
-            return(stats)
+            return {'slope': slope, 'intercept': intercept, 'r_value': r_value, 'p_value': p_value, 'std_err': std_err}
 
     def plot_comparison(self,
                         parameters:dict) -> None:
@@ -1220,41 +1433,96 @@ class AcousticID():
         s.close()
 
 class JCAModel(AcousticTMM):
+    """
+    PyTorch model for JCA parameter optimization using gradient descent.
+    
+    This model wraps AcousticTMM to enable gradient-based optimization of
+    JCA material parameters.
+    
+    Parameters
+    ----------
+    best_fr : torch.Tensor
+        Initial normalized flow resistivity guess.
+    best_phi : torch.Tensor
+        Initial porosity guess.
+    best_tau : torch.Tensor
+        Initial normalized tortuosity guess.
+    best_vcl : torch.Tensor
+        Initial normalized viscous characteristic length guess.
+    best_tcl : torch.Tensor
+        Initial normalized thermal characteristic length guess.
+    freq : torch.Tensor
+        Frequency array for calculations.
+    device : str, optional
+        Device for computations ('cpu' or 'cuda'). Default is 'cpu'.
+    """
+    
     def __init__(self,
                  best_fr,
                  best_phi,
                  best_tau,
                  best_vcl,
                  best_tcl,
-                 freq):
+                 freq,
+                 device: str = 'cpu'):
 
-        super().__init__()
-        self.fr = torch.nn.Parameter(best_fr)
-        self.phi = torch.nn.Parameter(best_phi)
-        self.tau = torch.nn.Parameter(best_tau)
-        self.vcl = torch.nn.Parameter(best_vcl)
-        self.tcl = torch.nn.Parameter(best_tcl)
-        self.structure = AcousticTMM(incidence='Normal', air_temperature=20)
+        super().__init__(device=device)
+        self._device = device
+        
+        # Ensure initial values are tensors on the correct device
+        self.fr = torch.nn.Parameter(torch.tensor(best_fr, device=device) if not isinstance(best_fr, torch.Tensor) else best_fr.to(device))
+        self.phi = torch.nn.Parameter(torch.tensor(best_phi, device=device) if not isinstance(best_phi, torch.Tensor) else best_phi.to(device))
+        self.tau = torch.nn.Parameter(torch.tensor(best_tau, device=device) if not isinstance(best_tau, torch.Tensor) else best_tau.to(device))
+        self.vcl = torch.nn.Parameter(torch.tensor(best_vcl, device=device) if not isinstance(best_vcl, torch.Tensor) else best_vcl.to(device))
+        self.tcl = torch.nn.Parameter(torch.tensor(best_tcl, device=device) if not isinstance(best_tcl, torch.Tensor) else best_tcl.to(device))
+        
+        self.structure = AcousticTMM(incidence='Normal', air_temperature=20, device=device)
         self.structure.frequency = freq
         self.thickness = None
     
-    def forward(self, thickness):
+    def forward(self, thickness: float) -> torch.Tensor:
+        """
+        Compute absorption coefficients for current parameters.
+        
+        Parameters
+        ----------
+        thickness : float
+            Sample thickness in millimeters.
+            
+        Returns
+        -------
+        torch.Tensor
+            Absorption coefficients at each frequency.
+        """
         self.thickness = thickness
-        layer = self.structure.Add_JCA_Layer(thickness, self.fr*1000000, self.phi, self.tau*5, self.vcl*500, self.tcl*500)
+        layer = self.structure.Add_JCA_Layer(
+            thickness, 
+            self.fr * 1000000, 
+            self.phi, 
+            self.tau * 5, 
+            self.vcl * 500, 
+            self.tcl * 500
+        )
         tm = self.structure.assemble_structure(layer)
-        a = self.structure.absorption(tm)[:,1].float()
+        a = self.structure.absorption(tm)[:, 1].float()
         return a
     
-    def string(self):
-        return f'fr = {self.fr.item()*1000000} phi = {self.phi.item()} tau = {self.tau.item()*5} vcl = {self.vcl.item()*500} tcl = {self.tcl.item()*500}'
+    def string(self) -> str:
+        """Return string representation of current parameters."""
+        return (f'fr = {self.fr.item()*1000000:.1f} '
+                f'phi = {self.phi.item():.4f} '
+                f'tau = {self.tau.item()*5:.3f} '
+                f'vcl = {self.vcl.item()*500:.1f} '
+                f'tcl = {self.tcl.item()*500:.1f}')
     
-    def results(self):
-        result_dict = {'thickness': self.thickness,
-                'flow resistivity': self.fr.item()*1000000,
-                'porosity': self.phi.item(),
-                'tortuosity': self.tau.item()*5,
-                'viscous characteristic length': self.vcl.item()*500,
-                'thermal characteristic length': self.tcl.item()*500,
-                'air gap':0
+    def results(self) -> dict:
+        """Return identified parameters as a dictionary."""
+        return {
+            'thickness': self.thickness,
+            'flow resistivity': self.fr.item() * 1000000,
+            'porosity': self.phi.item(),
+            'tortuosity': self.tau.item() * 5,
+            'viscous characteristic length': self.vcl.item() * 500,
+            'thermal characteristic length': self.tcl.item() * 500,
+            'air gap': 0
         }
-        return result_dict

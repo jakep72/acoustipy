@@ -1,10 +1,8 @@
-# import numpy as np
 import torch
 import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-import torch.backends.opt_einsum
 from acoustipy.Database import AcoustiBase
 
 
@@ -107,31 +105,37 @@ class AcousticTMM(torch.nn.Module):
         self.fs = fs
         self.incidence = incidence
         self.angles = angles
-        self.THIRD_OCTAVE_PREFERRED = torch.asarray([16,20,25,31.5,40,50,63,
-                                                  80,100,125,160,200,250,
-                                                  315,400,500,630,800,1000,
-                                                  1250,1600,2000,2500,3150,
-                                                  4000,5000,6300,8000,10000,
-                                                  12500,16000,20000])
-        self.OCTAVE_PREFERRED  = self.THIRD_OCTAVE_PREFERRED[0::3]
         self.Cp = Cp
         self.Cv = Cv
         self.viscosity = viscosity
         self.Pr = Pr
         self.P0 = P0
         self.device = device
-        self._custom_freq =  torch.arange(self.fmin,self.fmax+self.fs,self.fs)
+        
+        # Create tensors on the specified device
+        self.THIRD_OCTAVE_PREFERRED = torch.tensor(
+            [16, 20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250,
+             315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150,
+             4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000],
+            device=self.device
+        )
+        self.OCTAVE_PREFERRED = self.THIRD_OCTAVE_PREFERRED[0::3]
+        self._custom_freq = torch.arange(self.fmin, self.fmax + self.fs, self.fs, device=self.device)
         self.layers = []
         
 
     @property
     def frequency(self):
-        #frequency range of interest
-        return(self._custom_freq)
+        """Frequency range of interest, on the configured device."""
+        return self._custom_freq
     
     @frequency.setter
     def frequency(self, value):
-        self._custom_freq = value
+        """Set frequency range, ensuring it's on the correct device."""
+        if isinstance(value, torch.Tensor):
+            self._custom_freq = value.to(self.device)
+        else:
+            self._custom_freq = torch.tensor(value, device=self.device)
 
     @property
     def ang_freq(self):
@@ -190,9 +194,9 @@ class AcousticTMM(torch.nn.Module):
     
     @property
     def k0(self):
-        #Wavenumber
+        """Wavenumber, on the configured device."""
         k0 = self.ang_freq / self.soundspeed_temp
-        return (k0)
+        return k0.to(self.device) if isinstance(k0, torch.Tensor) else k0
     
     @property
     def Z0(self):
@@ -240,32 +244,34 @@ class AcousticTMM(torch.nn.Module):
             return (TM)
 
         elif self.incidence == "Diffuse":
-            angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
+            angles = torch.arange(self.angles[0], self.angles[1], self.angles[2])
+            n_angles = len(angles)
             vs = torch.sin(torch.deg2rad(angles)).to(self.device)
-            TM = torch.zeros((2,2,len(self.frequency),len(angles)),dtype = torch.complex64).to(self.device)
-            kpx = torch.zeros((len(self.frequency),len(angles)),dtype = torch.complex64).to(self.device)
             
-            v1 = torch.tile(kp[:,None], (1,len(angles))).to(self.device)
-            v2 = torch.tile(kp[:,None], (1,len(angles))).to(self.device)
-            v3 = torch.tile(self.k0[:,None],(1,len(angles))).to(self.device)
-            v4 = torch.tile(self.k0[:,None],(1,len(angles))).to(self.device)
-
-            Kp = torch.einsum('ij,ij -> ij',v1,v2)
-            K0 = torch.einsum('ij,ij -> ij',v3,v4)
-            VS = torch.einsum('ij,ij -> ij',vs[None,:],vs[None,:])
-            kpx[:,:] = torch.sqrt((Kp)-(torch.einsum('ij,ij -> ij',K0,VS)))
-
-            sin = 1j*torch.sin(kpx*thickness)
-            cos = torch.cos(kpx*thickness)
-            offset = torch.einsum('ij,ij,ij -> ij',Zp[:, None],kp[:, None],1/kpx)
-
+            TM = torch.zeros((2, 2, len(self.frequency), n_angles), dtype=torch.complex64, device=self.device)
             
-            TM[0,0,:,:] = cos
-            TM[0,1,:,:] = torch.einsum('ij,ij -> ij',offset,sin)
-            TM[1,0,:,:] = torch.einsum('ij,ij -> ij',sin,1/offset)
-            TM[1,1,:,:] = cos
+            # Expand kp and k0 for broadcasting: (n_freq, n_angles)
+            kp_expanded = kp[:, None].to(self.device)
+            k0_expanded = self.k0[:, None].to(self.device)
             
-            return(TM)
+            # Element-wise operations instead of einsum
+            kp_squared = kp_expanded * kp_expanded
+            k0_squared = k0_expanded * k0_expanded
+            vs_squared = vs[None, :] * vs[None, :]
+            
+            kpx = torch.sqrt(kp_squared - k0_squared * vs_squared)
+
+            sin_term = 1j * torch.sin(kpx * thickness)
+            cos_term = torch.cos(kpx * thickness)
+            Zp_expanded = Zp[:, None].to(self.device)
+            offset = Zp_expanded * kp_expanded / kpx
+
+            TM[0, 0, :, :] = cos_term
+            TM[0, 1, :, :] = offset * sin_term
+            TM[1, 0, :, :] = sin_term / offset
+            TM[1, 1, :, :] = cos_term
+            
+            return TM
         
     def _create_Maa_MPP_TM(self,
                            Zp: torch.Tensor) -> torch.Tensor:
@@ -299,20 +305,20 @@ class AcousticTMM(torch.nn.Module):
             return (TM)
         
         elif self.incidence == "Diffuse":
-            angles = torch.arange(self.angles[0],self.angles[1],self.angles[2])
+            angles = torch.arange(self.angles[0], self.angles[1], self.angles[2])
+            n_angles = len(angles)
             
-            TM = torch.zeros((2,2,len(self.frequency),len(angles)),dtype = torch.complex64)
+            TM = torch.zeros((2, 2, len(self.frequency), n_angles), dtype=torch.complex64)
+            
+            # Vectorized: cos(angles) has shape (n_angles,), Zp has shape (n_freq,)
+            cos_angles = torch.cos(torch.deg2rad(angles))
+            
+            TM[0, 0, :, :] = 1
+            TM[0, 1, :, :] = Zp[:, None] * cos_angles[None, :]
+            TM[1, 0, :, :] = 0
+            TM[1, 1, :, :] = 1
 
-            count = 0
-            for theta in angles:
-               
-                TM[0,0,:,count] = 1
-                TM[0,1,:,count] = Zp*torch.cos(torch.deg2rad(theta))
-                TM[1,0,:,count] = 0
-                TM[1,1,:,count] = 1
-                count += 1
-
-            return(TM)
+            return TM
     
     def _calc_dynamics(self,
                         flow_resistivity: float,
@@ -900,36 +906,23 @@ class AcousticTMM(torch.nn.Module):
         tauprime = thermal_tortuosity
         tau0 = viscous_tortuosity
         
-        if EF_model == 'JCA':
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
+        # JCAPL model uses permeability instead of flow resistivity
+        if EF_model == 'JCAPL':
+            fr = self.viscosity_temp / fr
         
-        elif EF_model == 'JCAL':
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
-        
-        elif EF_model == 'JCAPL':
-            fr = self.viscosity_temp/fr
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
-        
-        elif EF_model == 'DB':
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
+        peff, keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
 
-        elif EF_model == 'DBM':
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
+        # Biot limp frame equations
+        rho_tilde = mass_density + (phi * self.density_temp) - ((self.density_temp ** 2) / peff)  # eq. 15
+        gamma_tilde = (self.density_temp / peff) - 1  # eq. 16
+        rho_eq_limp = 1 / ((1 / (phi * peff)) + ((gamma_tilde ** 2) / (phi * rho_tilde)))  # eq. 24
+        
+        Zp = torch.sqrt(rho_eq_limp * keff)
+        kp = self.ang_freq * torch.sqrt(rho_eq_limp / keff)
 
-        rho_tilde = mass_density+(phi*self.density_temp)-((self.density_temp**2)/peff)       ##eq. 15
+        TM = self._create_layer_TM(Zp, kp, thickness)
         
-        gamma_tilde = (self.density_temp/peff)-1     #eq. 16
-        
-        rho_eq_limp = (1/(phi*peff)) + ((gamma_tilde**2)/(phi*rho_tilde))    #eq. 24
-        
-        rho_eq_limp = 1/rho_eq_limp
-        
-        Zp = torch.sqrt(rho_eq_limp*keff)
-        kp = self.ang_freq*torch.sqrt(rho_eq_limp/keff)
-
-        TM = self._create_layer_TM(Zp,kp,thickness)
-        
-        return([TM,thickness,layer_name])
+        return [TM, thickness, layer_name]
     
     def Add_Biot_Rigid_Layer(self,
                                 EF_model: str,
@@ -1003,37 +996,23 @@ class AcousticTMM(torch.nn.Module):
         tau0 = viscous_tortuosity
 
         
-        if EF_model == 'JCA':
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
+        # JCAPL model uses permeability instead of flow resistivity
+        if EF_model == 'JCAPL':
+            fr = self.viscosity_temp / fr
         
-        elif EF_model == 'JCAL':
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
-        
-        elif EF_model == 'JCAPL':
-            fr = self.viscosity_temp/fr
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
-        
-        elif EF_model == 'DB':
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
+        peff, keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
 
-        elif EF_model == 'DBM':
-            peff,keff = self._calc_dynamics(fr, phi, tau, vcl, tcl, kprime, tauprime, tau0, model=EF_model)
-            
+        # Biot rigid frame equations
+        rho_tilde = mass_density + (phi * self.density_temp) - ((self.density_temp ** 2) / peff)  # eq. 15
+        gamma_tilde = (self.density_temp / peff) - 1  # eq. 16
+        rho_eq_rigid = 1 / ((1 / (phi * peff)) + ((gamma_tilde ** 2) / (phi * rho_tilde)) + (((1 - phi) / phi) * (gamma_tilde / rho_tilde)))  # eq. 23
+        
+        Zp = torch.sqrt(rho_eq_rigid * keff)
+        kp = self.ang_freq * torch.sqrt(rho_eq_rigid / keff)
 
-        rho_tilde = mass_density+(phi*self.density_temp)-((self.density_temp**2)/peff)   #eq. 15
+        TM = self._create_layer_TM(Zp, kp, thickness)
         
-        gamma_tilde = (self.density_temp/peff)-1     #e. 16
-        
-        rho_eq_limp = (1/(phi*peff)) + ((gamma_tilde**2)/(phi*rho_tilde)) + (((1-phi)/phi)*(gamma_tilde/rho_tilde))  #eq. 23
-        
-        rho_eq_limp = 1/rho_eq_limp
-        
-        Zp = torch.sqrt(rho_eq_limp*keff)
-        kp = self.ang_freq*torch.sqrt(rho_eq_limp/keff)
-
-        TM = self._create_layer_TM(Zp,kp,thickness)
-        
-        return([TM,thickness,layer_name])
+        return [TM, thickness, layer_name]
 
     
     def Add_Resistive_Screen(self,
@@ -1237,7 +1216,7 @@ class AcousticTMM(torch.nn.Module):
             Zs_NG = self.Z0*((1+no_gap_data[:,1])/(1-no_gap_data[:,1]))
             Zs_G = self.Z0*((1+gap_data[:,1])/(1-gap_data[:,1]))
         
-        if torch.array_equal(no_gap_data[:,0],gap_data[:,0]) != True:
+        if not torch.equal(no_gap_data[:, 0], gap_data[:, 0]):
             raise ValueError("Frequencies must match between no gap and gap curves")
             
         T11A = torch.cos(self.k0*air_thickness)
@@ -1839,9 +1818,9 @@ class AcousticTMM(torch.nn.Module):
         """
         if type == 'complex':
             try:
-                data = torch.asarray(pd.read_csv(filename,header=None).applymap(lambda s: torch.complex128(s.replace('i', 'j'))))
+                data = torch.asarray(pd.read_csv(filename, header=None).map(lambda s: complex(s.replace('i', 'j'))))
             except Exception:
-                data = torch.asarray(pd.read_excel(filename,header=None).applymap(lambda s: torch.complex128(s.replace('i', 'j'))))
+                data = torch.asarray(pd.read_excel(filename, header=None).map(lambda s: complex(s.replace('i', 'j'))))
 
         elif type == 'float':
             try:

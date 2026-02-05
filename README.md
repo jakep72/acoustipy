@@ -7,11 +7,6 @@
 <!-- [![Publish to PyPI](https://github.com/jakep72/acoustipy/actions/workflows/python-publish.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/python-publish.yml) -->
 <!-- [![mkdocs-deploy](https://github.com/jakep72/acoustipy/actions/workflows/build_docs.yml/badge.svg)](https://github.com/jakep72/acoustipy/actions/workflows/build_docs.yml) -->
 
-# This branch is under active development and some functionality is currently broken.  
-### The intent is to transition to pytorch from numpy to potentially utilize GPU processing in the transfer matrix operations and gain access to the gradients for parameter identification.  Ideally, no breaking changes to the current API will be introduced.
-### Preliminary testing indicates ~8x average speedup for transfer matrix calculations just from the transition from numpy to pytorch with no GPU acceleration.
-### 
-
 # acoustipy
 
 Investigate and optimize the acoustic performance of porous and microperforate materials with acoustipy.  Use the acoustic transfer matrix method to explore new material designs and identify unique properties of existing materials via inverse, indirect, and hybrid optimization schemes.
@@ -26,14 +21,32 @@ Investigate and optimize the acoustic performance of porous and microperforate m
     (Windows) cd Scripts && activate.bat
     (Linux) source bin/activate
 
+### Install from PyPI (CPU)
+    pip install acoustipy
+
 ### Install from source
     git clone https://github.com/jakep72/acoustipy.git
     cd acoustipy
     pip install -e .
-    pip install -r requirements.txt
 
-### Install from PyPI
+### Install from source with uv (recommended)
+    git clone https://github.com/jakep72/acoustipy.git
+    cd acoustipy
+    uv pip install -e .
+
+### GPU Support (CUDA)
+The default installation uses CPU-only PyTorch from PyPI. For GPU acceleration with CUDA, install PyTorch with CUDA support first, then install acoustipy:
+
+    # Install PyTorch with CUDA (see https://pytorch.org/get-started/locally/ for your specific setup)
+    pip install torch --index-url https://download.pytorch.org/whl/cu121
+    
+    # Then install acoustipy
     pip install acoustipy
+
+Or with uv:
+
+    uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+    uv pip install acoustipy
 
 # Basic Usage
 Examples of most of the functionality of acoustipy can be found in the Examples section of the [documentation](https://jakep72.github.io/acoustipy/).  The snippet below corresponds to the multilayer structure example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.
