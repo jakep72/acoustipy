@@ -1210,7 +1210,7 @@ class AcousticTMM(torch.nn.Module):
             Zs_NG = self.Z0*((1+no_gap_data[:,1])/(1-no_gap_data[:,1]))
             Zs_G = self.Z0*((1+gap_data[:,1])/(1-gap_data[:,1]))
         
-        if torch.array_equal(no_gap_data[:,0],gap_data[:,0]) != True:
+        if not torch.equal(no_gap_data[:, 0], gap_data[:, 0]):
             raise ValueError("Frequencies must match between no gap and gap curves")
             
         T11A = torch.cos(self.k0*air_thickness)
