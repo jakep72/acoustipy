@@ -14,7 +14,11 @@ Investigate and optimize the acoustic performance of porous and microperforate m
     git clone https://github.com/jakep72/acoustipy.git
     cd acoustipy
     pip install -e .
-    pip install -r requirements.txt
+
+### Install from source with uv (recommended)
+    git clone https://github.com/jakep72/acoustipy.git
+    cd acoustipy
+    uv pip install -e .
 
 ### Install from PyPI
     pip install acoustipy
