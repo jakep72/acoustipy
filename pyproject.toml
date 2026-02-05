@@ -22,8 +22,13 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Intended Audience :: Science/Research",
 ]
+keywords = ["acoustics", "porous materials", "transfer matrix", "absorption", "impedance tube"]
 
+# Core dependencies - torch from PyPI is CPU-only by default
+# For GPU support, users should install torch separately from pytorch.org
 dependencies = [
     "numpy>=1.23",
     "pandas>=1.5",
@@ -33,10 +38,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Development dependencies
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "coverage-lcov>=0.2.4",
+]
+
+# Documentation dependencies
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings-python>=1.7.0",
+]
+
+# All optional dependencies
+all = [
+    "acoustipy[dev,docs]",
 ]
 
 [project.urls]
@@ -44,7 +61,19 @@ Homepage = "https://github.com/jakep72/acoustipy"
 Documentation = "https://jakep72.github.io/acoustipy/"
 Repository = "https://github.com/jakep72/acoustipy"
 Issues = "https://github.com/jakep72/acoustipy/issues"
+Changelog = "https://github.com/jakep72/acoustipy/releases"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+
+[tool.coverage.run]
+source = ["acoustipy"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]

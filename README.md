@@ -21,6 +21,9 @@ Investigate and optimize the acoustic performance of porous and microperforate m
     (Windows) cd Scripts && activate.bat
     (Linux) source bin/activate
 
+### Install from PyPI (CPU)
+    pip install acoustipy
+
 ### Install from source
     git clone https://github.com/jakep72/acoustipy.git
     cd acoustipy
@@ -31,8 +34,19 @@ Investigate and optimize the acoustic performance of porous and microperforate m
     cd acoustipy
     uv pip install -e .
 
-### Install from PyPI
+### GPU Support (CUDA)
+The default installation uses CPU-only PyTorch from PyPI. For GPU acceleration with CUDA, install PyTorch with CUDA support first, then install acoustipy:
+
+    # Install PyTorch with CUDA (see https://pytorch.org/get-started/locally/ for your specific setup)
+    pip install torch --index-url https://download.pytorch.org/whl/cu121
+    
+    # Then install acoustipy
     pip install acoustipy
+
+Or with uv:
+
+    uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+    uv pip install acoustipy
 
 # Basic Usage
 Examples of most of the functionality of acoustipy can be found in the Examples section of the [documentation](https://jakep72.github.io/acoustipy/).  The snippet below corresponds to the multilayer structure example and highlights a core feature of acoustipy -- the acoustic transfer matrix method.

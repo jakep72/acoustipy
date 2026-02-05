@@ -1063,63 +1063,73 @@ class AcousticID():
 
         return model.results()
 
-    def stats(self,
-              parameters:dict) -> dict:
+    def _to_numpy(self, data) -> np.ndarray:
+        """
+        Convert data to numpy array, handling torch tensors.
+        
+        Parameters
+        ----------
+        data : torch.Tensor or np.ndarray or array-like
+            Data to convert.
+            
+        Returns
+        -------
+        np.ndarray
+            Data as numpy array.
+        """
+        if isinstance(data, torch.Tensor):
+            return data.detach().cpu().numpy()
+        return np.asarray(data)
+
+    def stats(self, parameters: dict) -> dict:
         """
         Calculates statistics about the parameters identified in the optimization routine via linear regression of the predicted vs measured
         absorption coefficients.
 
         Parameters
         ----------
-        parameters (dict):
-            dictionary containing the identified thickness, flow resistivity, porosity, tortuosity, 
+        parameters : dict
+            Dictionary containing the identified thickness, flow resistivity, porosity, tortuosity, 
             viscous characteristic length, thermal characteristic length, and air gap of the sample.
 
         Returns
         -------
-        stats (dict):
-            dictionary containing the slope, intercept, r value, p value, and std error returned from the linear regression.
+        stats : dict
+            Dictionary containing the slope, intercept, r value, p value, and std error returned from the linear regression.
             If 'Dual' opt_type is specified, the statistics for each mounting condition are averaged.
-        
         """
         if self.opt_type == 'No Gap':
-            x = self.meas_abs[0]
-            y = self._predictionJCA(parameters, optimize=False)
+            x = self._to_numpy(self.meas_abs[0])
+            y = self._to_numpy(self._predictionJCA(parameters, optimize=False))
             
-            slope,intercept,r_value,p_value,std_err = scipy.stats.linregress(x,y)
-            stats = {'slope':slope,'intercept':intercept,'r_value':r_value,'p_value':p_value,'std_err':std_err}
-            
-            return(stats)
+            slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(x, y)
+            return {'slope': slope, 'intercept': intercept, 'r_value': r_value, 'p_value': p_value, 'std_err': std_err}
         
         elif self.opt_type == 'Gap':
-            x = self.meas_abs[1]
-            y = self._predictionJCA(parameters, optimize=False)
+            x = self._to_numpy(self.meas_abs[1])
+            y = self._to_numpy(self._predictionJCA(parameters, optimize=False))
             
-            slope,intercept,r_value,p_value,std_err = scipy.stats.linregress(x,y)
-            stats = {'slope':slope,'intercept':intercept,'r_value':r_value,'p_value':p_value,'std_err':std_err}
-
-            return(stats)
+            slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(x, y)
+            return {'slope': slope, 'intercept': intercept, 'r_value': r_value, 'p_value': p_value, 'std_err': std_err}
         
         elif self.opt_type == 'Dual':
-            x1 = self.meas_abs[0]
-            y1 = self._predictionJCA(parameters, optimize=False)[0]
+            x1 = self._to_numpy(self.meas_abs[0])
+            y1 = self._to_numpy(self._predictionJCA(parameters, optimize=False)[0])
             
-            slope1,intercept1,r_value1,p_value1,std_err1 = scipy.stats.linregress(x1,y1)
+            slope1, intercept1, r_value1, p_value1, std_err1 = scipy.stats.linregress(x1, y1)
             
-            x2 = self.meas_abs[1]
-            y2 = self._predictionJCA(parameters, optimize=False)[1]
+            x2 = self._to_numpy(self.meas_abs[1])
+            y2 = self._to_numpy(self._predictionJCA(parameters, optimize=False)[1])
             
-            slope2,intercept2,r_value2,p_value2,std_err2 = scipy.stats.linregress(x2,y2)
+            slope2, intercept2, r_value2, p_value2, std_err2 = scipy.stats.linregress(x2, y2)
             
-            slope = np.abs((slope1+slope2)/2)
-            intercept = np.abs((intercept1+intercept2)/2)
-            r_value = np.abs((r_value1+r_value2)/2)
-            p_value = np.abs((p_value1+p_value2)/2)
-            std_err = np.abs((std_err1+std_err2)/2)
+            slope = np.abs((slope1 + slope2) / 2)
+            intercept = np.abs((intercept1 + intercept2) / 2)
+            r_value = np.abs((r_value1 + r_value2) / 2)
+            p_value = np.abs((p_value1 + p_value2) / 2)
+            std_err = np.abs((std_err1 + std_err2) / 2)
                         
-            stats = {'slope':slope,'intercept':intercept,'r_value':r_value,'p_value':p_value,'std_err':std_err}
-            
-            return(stats)
+            return {'slope': slope, 'intercept': intercept, 'r_value': r_value, 'p_value': p_value, 'std_err': std_err}
 
     def plot_comparison(self,
                         parameters:dict) -> None:
