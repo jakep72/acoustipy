@@ -156,13 +156,13 @@ class AcousticID():
             return(gap_freq)
         
         elif self.opt_type == 'Dual':
-            no_gap_freq = torch.tensor(self.no_gap_data[:,0]).real
-            gap_freq = torch.tensor(self.gap_data[:,0]).real
+            no_gap_freq = torch.tensor(self.no_gap_data[:, 0]).real
+            gap_freq = torch.tensor(self.gap_data[:, 0]).real
         
-            if np.array_equal(no_gap_freq,gap_freq) != True:
+            if not torch.equal(no_gap_freq, gap_freq):
                 raise ValueError("Frequencies must match between no gap and gap absorption curves")
             else:
-                return(no_gap_freq)
+                return no_gap_freq
 
 
     @property
@@ -357,34 +357,27 @@ class AcousticID():
             return([no_gap_pred,gap_pred])
            
     def _error(self,
-               x: list) -> float:
+               x: list) -> tuple[float, np.ndarray]:
         """
         Function that is minimized in the optimization routine. Calculates the error between the measured (impedance tube)
         and predicted (TMM) absorption coefficients.
 
         Parameters
         ----------
-        x (list):
-            list structure containing the identified thickness, flow resistivity, porosity, tortuosity, viscous characteristic length,
+        x : list
+            List containing the identified thickness, flow resistivity, porosity, tortuosity, viscous characteristic length,
             thermal characteristic length, and air gap thickness of the sample (in that order).
 
         Returns
         -------
-        err (float):
-            if opt_type is 'No Gap' or 'Gap' --> sum of the absolute square difference between measured and predicted absorption coefficients across all specified frequencies.
-            if opt_type is 'Dual', the error for each mounting condition is averaged into a single error metric
-        
+        err : float
+            If opt_type is 'No Gap' or 'Gap': sum of the absolute square difference between measured and predicted 
+            absorption coefficients across all specified frequencies.
+            If opt_type is 'Dual': the error for each mounting condition is averaged into a single error metric.
+        grad : np.ndarray
+            Gradient of the error with respect to the parameters.
         """
         params = torch.tensor(x, requires_grad=True)
-        # t = x[0]
-        # fr = x[1]
-        # phi = x[2]
-        # tort = x[3]
-        # vcl = x[4]
-        # tcl = x[5]
-        # air = x[6]
-
-        # params = {'thickness':t,'flow resistivity':fr,'porosity':phi,'tortuosity':tort,'viscous characteristic length':vcl,'thermal characteristic length':tcl,'air gap':air}
 
         A = self._predictionJCA(params, optimize=True)
         
@@ -903,69 +896,142 @@ class AcousticID():
             
             return(result_dict)
         
-    def _criterion(self, y1, y2,params):
-        err = 1e12*torch.sum(torch.diff(y1-y2)**2)
+    def _criterion(self, y1: torch.Tensor, y2: torch.Tensor, params: dict) -> torch.Tensor:
+        """
+        Loss function for the ML optimization method with penalty terms for invalid parameters.
+
+        Parameters
+        ----------
+        y1 : torch.Tensor
+            Predicted absorption coefficients.
+        y2 : torch.Tensor
+            Measured absorption coefficients.
+        params : dict
+            Dictionary of current parameter values (normalized).
+
+        Returns
+        -------
+        err : torch.Tensor
+            Weighted error value including penalties for physically invalid parameters.
+        """
+        err = 1e12 * torch.sum(torch.diff(y1 - y2) ** 2)
         if params['vcl'] > params['tcl']:
-            err = 2*err
+            err = 2 * err
         if params['fr'] > 1 or params['fr'] < 0:
-            err = 2*err
+            err = 2 * err
         if params['phi'] > 1 or params['phi'] < 0.001:
-            err = 10*err
+            err = 10 * err
         if params['tau'] > 1 or params['tau'] < 0.2:
-            err = 2*err
+            err = 2 * err
         if params['vcl'] > 1 or params['tcl'] > 1:
-            err = 10*err
-        return(err)
+            err = 10 * err
+        return err
     
-    def _get_params(self, model):
+    def _get_params(self, model: torch.nn.Module) -> dict:
+        """
+        Extract current parameter values from a JCAModel.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            The JCAModel instance containing learnable parameters.
+
+        Returns
+        -------
+        params : dict
+            Dictionary containing normalized parameter values (fr, phi, tau, vcl, tcl).
+        """
         params = {}
-        i=0
-        for p in model.parameters():
+        for i, p in enumerate(model.parameters()):
             if i == 0:
                 params['fr'] = p.item()
-            if i == 1:
+            elif i == 1:
                 params['phi'] = p.item()
-            if i == 2:
+            elif i == 2:
                 params['tau'] = p.item()
-            if i == 3:
+            elif i == 3:
                 params['vcl'] = p.item()
-            if i == 4:
+            elif i == 4:
                 params['tcl'] = p.item()
-            i += 1
         return params
     
-    def _gridsearch(self, base_abs, thickness):
+    def _gridsearch(self, base_abs: torch.Tensor, thickness: float) -> tuple:
+        """
+        Perform a coarse grid search to find good initial parameter estimates for the ML optimizer.
+
+        Parameters
+        ----------
+        base_abs : torch.Tensor
+            Measured absorption coefficients to match.
+        thickness : float
+            Sample thickness in millimeters.
+
+        Returns
+        -------
+        tuple
+            Normalized initial guesses for (flow_resistivity, porosity, tortuosity, vcl, tcl).
+        """
         print("Starting grid search...")
-        fr = torch.linspace(10000,1000000,5)
-        phi = torch.linspace(0.05,.95,10)
-        tau = torch.linspace(1,4.5,5)
+        fr = torch.linspace(10000, 1000000, 5)
+        phi = torch.linspace(0.05, 0.95, 10)
+        tau = torch.linspace(1, 4.5, 5)
         vcl = torch.linspace(10, 450, 10)
-        tcl = torch.linspace(10, 450,10)
-        best_err = 10
+        tcl = torch.linspace(10, 450, 10)
+        best_err = float('inf')
+        best_fr = best_phi = best_tau = best_vcl = best_tcl = None
+        
         for f in fr:
             for p in phi:
                 for t in tau:
                     for v in vcl:
                         for tc in tcl:
                             if tc >= v:
-                                s = AcousticTMM(incidence='Normal',air_temperature=20)
-                                l = s.Add_JCA_Layer(thickness,f,p,t,v,tc)
-                                tm = s.assemble_structure(l)
-                                a = s.absorption(tm)[:,1].float()
-                                err = torch.sum(torch.diff(a-base_abs)**2)
+                                s = AcousticTMM(incidence='Normal', air_temperature=20)
+                                layer = s.Add_JCA_Layer(thickness, f, p, t, v, tc)
+                                tm = s.assemble_structure(layer)
+                                a = s.absorption(tm)[:, 1].float()
+                                err = torch.sum(torch.diff(a - base_abs) ** 2)
                                 
                                 if err < best_err:
                                     best_err = err
-                                    best_fr = f/1000000
+                                    best_fr = f / 1000000
                                     best_phi = p
-                                    best_tau = t/5
-                                    best_vcl = v/500
-                                    best_tcl = tc/500
+                                    best_tau = t / 5
+                                    best_vcl = v / 500
+                                    best_tcl = tc / 500
 
-        return(best_fr, best_phi, best_tau, best_vcl, best_tcl)
+        return best_fr, best_phi, best_tau, best_vcl, best_tcl
     
-    def ML(self, thickness, verbose: bool=True):
-        y=self.meas_abs[0]
+    def ML(self, thickness: float, verbose: bool = True) -> dict:
+        """
+        Machine learning-based parameter identification using gradient descent optimization.
+        
+        This method uses the Adam optimizer to find JCA model parameters by minimizing 
+        the difference between predicted and measured absorption coefficients. It first 
+        performs a coarse grid search to find good initial estimates, then refines them
+        using gradient descent.
+
+        Parameters
+        ----------
+        thickness : float
+            The measured thickness of the sample in millimeters.
+        verbose : bool, optional
+            If True, prints optimization progress every 100 iterations (default is True).
+
+        Returns
+        -------
+        result_dict : dict
+            Dictionary containing the identified parameters: thickness, flow resistivity,
+            porosity, tortuosity, viscous characteristic length, thermal characteristic length,
+            and air gap.
+
+        Notes
+        -----
+        This method requires 'No Gap' mounting condition and uses adaptive learning rate
+        scheduling to improve convergence. The optimization typically converges within
+        100,000 iterations or when loss falls below 8.
+        """
+        y = self.meas_abs[0]
         fr, phi, tau, vcl, tcl1 = self._gridsearch(y, thickness)
         model = JCAModel(fr, phi, tau, vcl, tcl1, self.frequency)
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
