@@ -76,20 +76,40 @@ class AcousticID():
         Atmospheric pressure [Pa]
 
     """
+    # Valid options for mount_type and input_type
+    VALID_MOUNT_TYPES = ('No Gap', 'Gap', 'Dual')
+    VALID_INPUT_TYPES = ('absorption', 'reflection', 'surface')
+
     def __init__(self,
-                 mount_type:str = "No Gap",
-                 no_gap_file:str = None,
-                 gap_file:str = None,
-                 input_type:str = 'absorption',
-                 air_temperature:float = None,
-                 sound_speed:float = 343.152,
-                 air_density:float = 1.2058,
-                 Cp:float = 1.004425,
-                 Cv:float = 0.717425,
-                 viscosity:float = 1.825e-05,
-                 Pr:float = .7157,
-                 P0:float = 101325
+                 mount_type: str = "No Gap",
+                 no_gap_file: str = None,
+                 gap_file: str = None,
+                 input_type: str = 'absorption',
+                 air_temperature: float = None,
+                 sound_speed: float = 343.152,
+                 air_density: float = 1.2058,
+                 Cp: float = 1.004425,
+                 Cv: float = 0.717425,
+                 viscosity: float = 1.825e-05,
+                 Pr: float = 0.7157,
+                 P0: float = 101325
                  ):
+        # Validate mount_type
+        if mount_type not in self.VALID_MOUNT_TYPES:
+            raise ValueError(
+                f"Invalid mount_type '{mount_type}'. "
+                f"Must be one of: {', '.join(self.VALID_MOUNT_TYPES)}"
+            )
+        
+        # Validate input_type
+        if input_type not in self.VALID_INPUT_TYPES:
+            raise ValueError(
+                f"Invalid input_type '{input_type}'. "
+                f"Must be one of: {', '.join(self.VALID_INPUT_TYPES)}"
+            )
+        
+        # Validate required files based on mount_type
+        self._validate_files(mount_type, no_gap_file, gap_file)
 
         self.temp = air_temperature
         self.speed = sound_speed
@@ -106,42 +126,86 @@ class AcousticID():
         self.porosity = None
         self.uncertainty = None
         self.air_gap = None
+
+        # Load data based on mount type and input type
+        data_type = 'float' if input_type == 'absorption' else 'complex'
         
+        if mount_type == 'No Gap':
+            self.no_gap_data = self.load_to_array(no_gap_file, type=data_type)
+
+        elif mount_type == 'Gap':
+            self.gap_data = self.load_to_array(gap_file, type=data_type)
+
+        elif mount_type == 'Dual':
+            self.no_gap_data = self.load_to_array(no_gap_file, type=data_type)
+            self.gap_data = self.load_to_array(gap_file, type=data_type)
+    
+    @staticmethod
+    def _validate_files(mount_type: str, no_gap_file: str, gap_file: str) -> None:
+        """
+        Validate that required files are provided and exist.
         
-
-        if self.opt_type == 'No Gap':
-            if self.input_type == 'reflection':
-                self.no_gap_data = self.load_to_array(no_gap_file)
-                          
-            elif self.input_type == 'surface':
-                self.no_gap_data = self.load_to_array(no_gap_file)
-                
-            elif self.input_type == 'absorption':
-                    self.no_gap_data = self.load_to_array(no_gap_file,type='float')
-
-        elif self.opt_type == 'Gap':
-            if self.input_type == 'reflection':    
-                self.gap_data = self.load_to_array(gap_file)
+        Parameters
+        ----------
+        mount_type : str
+            The mounting type being used.
+        no_gap_file : str
+            Path to the no-gap data file.
+        gap_file : str
+            Path to the gap data file.
             
-            elif self.input_type == 'surface':
-                self.gap_data = self.load_to_array(gap_file)
-                
-            elif self.input_type == 'absorption':
-                    self.gap_data = self.load_to_array(gap_file,type='float')
-
-        elif self.opt_type == 'Dual':
-            if self.input_type == 'reflection':
-                self.no_gap_data = self.load_to_array(no_gap_file)
-                self.gap_data = self.load_to_array(gap_file)
+        Raises
+        ------
+        ValueError
+            If required files are not provided or do not exist.
+        """
+        import os
+        
+        if mount_type in ('No Gap', 'Dual'):
+            if no_gap_file is None:
+                raise ValueError(f"no_gap_file is required for mount_type='{mount_type}'")
+            if not os.path.exists(no_gap_file):
+                raise FileNotFoundError(f"no_gap_file not found: {no_gap_file}")
+        
+        if mount_type in ('Gap', 'Dual'):
+            if gap_file is None:
+                raise ValueError(f"gap_file is required for mount_type='{mount_type}'")
+            if not os.path.exists(gap_file):
+                raise FileNotFoundError(f"gap_file not found: {gap_file}")
+    
+    @staticmethod
+    def _validate_physical_params(thickness: float, flow_resistivity: float, 
+                                   porosity: float, air_gap: float = 0) -> None:
+        """
+        Validate that material parameters are physically reasonable.
+        
+        Parameters
+        ----------
+        thickness : float
+            Sample thickness in mm.
+        flow_resistivity : float
+            Flow resistivity in Pa*s/m^2.
+        porosity : float
+            Open porosity (0-1).
+        air_gap : float, optional
+            Air gap thickness in mm.
             
-            elif self.input_type == 'surface':
-                self.no_gap_data = self.load_to_array(no_gap_file)
-                self.gap_data = self.load_to_array(gap_file)
-                
-
-            elif self.input_type == 'absorption':
-                self.no_gap_data = self.load_to_array(no_gap_file,type='float')
-                self.gap_data = self.load_to_array(gap_file,type='float')
+        Raises
+        ------
+        ValueError
+            If parameters are physically invalid.
+        """
+        if thickness <= 0:
+            raise ValueError(f"Thickness must be positive, got {thickness}")
+        
+        if flow_resistivity <= 0:
+            raise ValueError(f"Flow resistivity must be positive, got {flow_resistivity}")
+        
+        if not (0 < porosity <= 1):
+            raise ValueError(f"Porosity must be in range (0, 1], got {porosity}")
+        
+        if air_gap < 0:
+            raise ValueError(f"Air gap cannot be negative, got {air_gap}")
         
     @property
     def frequency(self):
@@ -498,20 +562,26 @@ class AcousticID():
 
         Returns
         -------
-        result_dict (dict):
-            dictionary containing the identified parameters associated with the lowest calculated error.
+        result_dict : dict
+            Dictionary containing the identified parameters associated with the lowest calculated error.
         
+        Raises
+        ------
+        ValueError
+            If input parameters are physically invalid.
         """
+        # Validate physical constraints
+        self._validate_physical_params(thickness, flow_resistivity, porosity, air_gap)
+        
         self.thickness = thickness
         self.flow_resistivity = flow_resistivity
         self.porosity = porosity
         self.air_gap = air_gap
 
-        if uncertainty >= 0 and uncertainty <= 1:
+        if 0 <= uncertainty <= 1:
             self.uncertainty = uncertainty
-
         else:
-            print("Uncertainty must be between 0 and 1, reverting to default uncertainty of 1.0%!")
+            warnings.warn("Uncertainty must be between 0 and 1, reverting to default uncertainty of 1.0%!")
             self.uncertainty = 0.01
 
         init_tort = 2.5
@@ -809,22 +879,36 @@ class AcousticID():
 
         Returns
         -------
-        result_dict (dict):
-            dictionary containing the identified parameters associated with the lowest calculated error.
+        result_dict : dict
+            Dictionary containing the identified parameters associated with the lowest calculated error.
         
+        Raises
+        ------
+        ValueError
+            If input parameters are physically invalid.
         """
+        # Validate physical constraints (flow_resistivity can be None for Hybrid)
+        if thickness <= 0:
+            raise ValueError(f"Thickness must be positive, got {thickness}")
+        if not (0 < porosity <= 1):
+            raise ValueError(f"Porosity must be in range (0, 1], got {porosity}")
+        if air_gap < 0:
+            raise ValueError(f"Air gap cannot be negative, got {air_gap}")
+        if flow_resistivity is not None and flow_resistivity <= 0:
+            raise ValueError(f"Flow resistivity must be positive, got {flow_resistivity}")
+        
         self.thickness = thickness
         self.porosity = porosity
         self.air_gap = air_gap
-        if uncertainty >= 0 and uncertainty <= 1:
-            self.uncertainty = uncertainty
-
-        else:
-            print("Uncertainty must be between 0 and 1, reverting to default uncertainty of 1.0%!")
-            self.uncertainty = 0.01
         
+        if 0 <= uncertainty <= 1:
+            self.uncertainty = uncertainty
+        else:
+            warnings.warn("Uncertainty must be between 0 and 1, reverting to default uncertainty of 1.0%!")
+            self.uncertainty = 0.01
 
-        indirect_results = self.Indirect(thickness=self.thickness,porosity=self.porosity, flow_resistivity=flow_resistivity,air_gap=self.air_gap)
+        indirect_results = self.Indirect(thickness=self.thickness, porosity=self.porosity, 
+                                         flow_resistivity=flow_resistivity, air_gap=self.air_gap)
         
         if np.isnan(indirect_results['thermal characteristic length']):
             indirect_results['thermal characteristic length'] = indirect_results['viscous characteristic length']
@@ -1002,7 +1086,12 @@ class AcousticID():
 
         return best_fr, best_phi, best_tau, best_vcl, best_tcl
     
-    def ML(self, thickness: float, verbose: bool = True) -> dict:
+    def ML(self, 
+           thickness: float, 
+           verbose: bool = True,
+           max_iterations: int = 100000,
+           learning_rate: float = 1e-3,
+           early_stopping_loss: float = 8.0) -> dict:
         """
         Machine learning-based parameter identification using gradient descent optimization.
         
@@ -1017,6 +1106,13 @@ class AcousticID():
             The measured thickness of the sample in millimeters.
         verbose : bool, optional
             If True, prints optimization progress every 100 iterations (default is True).
+        max_iterations : int, optional
+            Maximum number of optimization iterations (default is 100000).
+        learning_rate : float, optional
+            Initial learning rate for the Adam optimizer (default is 1e-3).
+            The learning rate is automatically reduced as the loss decreases.
+        early_stopping_loss : float, optional
+            Stop optimization when loss falls below this value (default is 8.0).
 
         Returns
         -------
@@ -1028,38 +1124,56 @@ class AcousticID():
         Notes
         -----
         This method requires 'No Gap' mounting condition and uses adaptive learning rate
-        scheduling to improve convergence. The optimization typically converges within
-        100,000 iterations or when loss falls below 8.
+        scheduling to improve convergence. The learning rate is reduced at loss thresholds
+        of 2000, 250, and 10.
+        
+        Raises
+        ------
+        ValueError
+            If thickness is not positive.
         """
+        # Input validation
+        if thickness <= 0:
+            raise ValueError("Thickness must be positive")
+        if max_iterations <= 0:
+            raise ValueError("max_iterations must be positive")
+        if learning_rate <= 0:
+            raise ValueError("learning_rate must be positive")
+        
         y = self.meas_abs[0]
         fr, phi, tau, vcl, tcl1 = self._gridsearch(y, thickness)
         model = JCAModel(fr, phi, tau, vcl, tcl1, self.frequency)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        
+        # Store initial learning rate for adaptive scheduling
+        initial_lr = learning_rate
 
-        for t in range(100000):
+        for t in range(max_iterations):
             y_pred = model.forward(thickness)
 
             loss = self._criterion(y_pred, y, self._get_params(model))
            
+            # Adaptive learning rate scheduling
             if loss < 2000:
                 for g in optimizer.param_groups:
-                    g['lr'] = 5e-4
+                    g['lr'] = initial_lr * 0.5
             if loss < 250:
                 for g in optimizer.param_groups:
-                    g['lr'] = 1e-4
+                    g['lr'] = initial_lr * 0.1
             if loss < 10:
                 for g in optimizer.param_groups:
-                    g['lr'] = 5e-5
-            if loss < 8:
+                    g['lr'] = initial_lr * 0.05
+            if loss < early_stopping_loss:
+                if verbose:
+                    print(f"Converged at iteration {t} with loss {loss.item():.4f}")
                 break
 
             if t % 100 == 0 and verbose:
-                print(t, loss.item(), model.string())
+                print(f"Iteration {t}: loss={loss.item():.4f}, {model.string()}")
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            # self._clamper(model)
 
         return model.results()
 
